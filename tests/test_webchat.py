@@ -96,6 +96,13 @@ def test_webclient_send_writes_to_active_chat(tmp_path):
 
 # ---- Web routes -----------------------------------------------------------
 
+def test_root_redirects_to_chat(tmp_path):
+    client, *_ = make_web_client(tmp_path)
+    r = client.get("/", follow_redirects=False)
+    assert r.status_code in (307, 308)
+    assert r.headers["location"] == "/chat"
+
+
 def test_chat_page_and_pwa_assets_served(tmp_path):
     client, *_ = make_web_client(tmp_path)
     assert client.get("/chat").status_code == 200

@@ -23,6 +23,7 @@ from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
+    RedirectResponse,
     Response,
 )
 from fastapi.staticfiles import StaticFiles
@@ -391,6 +392,11 @@ def build_app(deps: AppDeps) -> FastAPI:
 
     if STATIC_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    @app.get("/")
+    def root():
+        # The app lives at /chat; send the bare domain there so the link "just works".
+        return RedirectResponse(url="/chat")
 
     @app.get("/chat")
     def chat_page():
