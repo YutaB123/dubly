@@ -12,16 +12,25 @@
 <link rel="apple-touch-icon" href="/static/icon-180.png" />
 <title>Study Assistant</title>
 <style>
-  :root { --bg:#0b141a; --bar:#101c24; --me:#0a84ff; --them:#26323b; --text:#e9edf0; --muted:#8a99a5; }
+  :root { --bg:#0b141a; --bar:#101c24; --me:#0a84ff; --them:#26323b; --text:#e9edf0; --muted:#8a99a5;
+    --accent1:#0a84ff; --accent2:#6f5cff; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
+  html,body { margin:0; height:100%; color:var(--text);
+    background:radial-gradient(125% 75% at 50% -8%, #173a57 0%, #0b141a 52%) fixed, var(--bg);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
   #app { display:flex; flex-direction:column; height:100dvh; }
-  header { background:var(--bar); padding:max(env(safe-area-inset-top),10px) 8px 10px;
+  header { background:linear-gradient(180deg,#13242f,#101c24); padding:max(env(safe-area-inset-top),10px) 8px 10px;
     border-bottom:1px solid #1c2a33; position:sticky; top:0; z-index:5;
-    display:flex; align-items:center; gap:6px; }
+    display:flex; align-items:center; gap:8px; }
+  header .avatar { width:34px; height:34px; border-radius:50%; flex:0 0 auto; font-size:18px;
+    background:linear-gradient(135deg,var(--accent1),var(--accent2)); display:flex; align-items:center;
+    justify-content:center; box-shadow:0 3px 12px rgba(111,92,255,.45); }
   header .title { flex:1; text-align:center; font-weight:600; font-size:17px; }
   header .title small { display:block; font-weight:400; font-size:12px; color:var(--muted); margin-top:2px; }
+  .onlinedot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#31d158;
+    margin-right:5px; vertical-align:middle; animation:pulse 2.2s infinite; }
+  @keyframes pulse { 0%{ box-shadow:0 0 0 0 rgba(49,209,88,.5); } 70%{ box-shadow:0 0 0 6px rgba(49,209,88,0); }
+    100%{ box-shadow:0 0 0 0 rgba(49,209,88,0); } }
   .iconbtn { width:38px; height:38px; border:none; background:transparent; color:var(--text);
     font-size:20px; border-radius:50%; cursor:pointer; flex:0 0 auto; }
   .iconbtn:active { background:#1c2a33; }
@@ -36,11 +45,26 @@
     -webkit-overflow-scrolling:touch; }
   .row { display:flex; } .row.me { justify-content:flex-end; } .row.them { justify-content:flex-start; }
   .bubble { max-width:78%; padding:9px 13px; border-radius:19px; font-size:16px; line-height:1.35;
-    white-space:pre-wrap; word-wrap:break-word; }
-  .me .bubble { background:var(--me); color:#fff; border-bottom-right-radius:5px; }
+    white-space:pre-wrap; word-wrap:break-word; animation:pop .28s cubic-bezier(.2,.8,.3,1.05); }
+  @keyframes pop { from{ opacity:0; transform:translateY(8px) scale(.96); } to{ opacity:1; transform:none; } }
+  .me .bubble { background:linear-gradient(135deg,var(--accent1),var(--accent2)); color:#fff;
+    border-bottom-right-radius:5px; box-shadow:0 2px 10px rgba(10,132,255,.25); }
   .them .bubble { background:var(--them); color:var(--text); border-bottom-left-radius:5px; }
   .bubble a.doc { display:inline-block; margin-top:6px; padding:7px 12px; background:rgba(255,255,255,.14);
     border-radius:12px; color:inherit; text-decoration:none; font-size:14px; }
+  .bubble a:not(.doc) { color:#7fb8ff; text-decoration:underline; word-break:break-all; }
+  .me .bubble a:not(.doc) { color:#e6f0ff; }
+  .bubble .deckbtn { display:flex; flex-direction:column; gap:2px; margin-top:8px; width:100%; text-align:left;
+    padding:11px 14px; border:none; border-radius:14px; cursor:pointer; color:#fff;
+    background:linear-gradient(135deg,var(--accent1),var(--accent2)); box-shadow:0 4px 14px rgba(10,132,255,.35); }
+  .bubble .deckbtn:active { transform:scale(.98); }
+  .bubble .deckbtn .dt { font-weight:600; font-size:15px; }
+  .bubble .deckbtn .ds { font-size:12px; opacity:.85; }
+  #deckOverlay { position:fixed; inset:0; z-index:40; background:var(--bg); }
+  #deckOverlay iframe { width:100%; height:100%; border:none; }
+  #deckOverlay #deckClose { position:absolute; top:max(env(safe-area-inset-top),10px); right:12px;
+    width:40px; height:40px; border-radius:50%; border:none; cursor:pointer; font-size:18px; color:#fff;
+    background:rgba(20,34,45,.85); backdrop-filter:blur(6px); box-shadow:0 2px 10px rgba(0,0,0,.4); }
   .dots { display:inline-flex; gap:4px; }
   .dots i { width:7px; height:7px; border-radius:50%; background:var(--muted); display:block;
     animation:blink 1.3s infinite both; }
@@ -50,8 +74,29 @@
     border-top:1px solid #1c2a33; display:flex; gap:8px; align-items:flex-end; }
   textarea { flex:1; resize:none; border:none; outline:none; background:#0e1a22; color:var(--text);
     border-radius:20px; padding:10px 14px; font-size:16px; max-height:120px; line-height:1.3; font-family:inherit; }
-  button#send { border:none; background:var(--me); color:#fff; width:40px; height:40px; border-radius:50%;
-    font-size:19px; flex:0 0 auto; cursor:pointer; } button#send:disabled { opacity:.4; }
+  button#send { border:none; background:linear-gradient(135deg,var(--accent1),var(--accent2)); color:#fff;
+    width:40px; height:40px; border-radius:50%; font-size:19px; flex:0 0 auto; cursor:pointer;
+    box-shadow:0 3px 12px rgba(10,132,255,.4); transition:transform .1s; }
+  button#send:active { transform:scale(.9); } button#send:disabled { opacity:.4; box-shadow:none; }
+  button#send.stop { background:linear-gradient(135deg,#ff5d5d,#ff2d55); box-shadow:0 3px 12px rgba(255,45,85,.4); }
+  #attach { font-size:21px; }
+  #previews { display:flex; gap:8px; padding:6px 12px; overflow-x:auto; background:var(--bar);
+    -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  #previews::-webkit-scrollbar { display:none; }
+  #previews .chip { flex:0 0 auto; display:flex; align-items:center; gap:6px; max-width:210px;
+    background:#13212b; border:1px solid #2c4a63; color:var(--text); padding:6px 10px; border-radius:12px;
+    font-size:13px; }
+  #previews .chip span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #previews .chip button { border:none; background:none; color:var(--muted); font-size:15px; cursor:pointer; padding:0; }
+  #chips { display:flex; gap:8px; padding:4px 12px 8px; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    scrollbar-width:none; background:var(--bar); }
+  #chips::-webkit-scrollbar { display:none; }
+  #chips button { flex:0 0 auto; border:1px solid #2c4a63; background:#13212b; color:var(--text);
+    padding:8px 14px; border-radius:18px; font-size:14px; white-space:nowrap; cursor:pointer; }
+  #chips button:active { background:#1c2f3d; transform:scale(.96); }
+  .gate-badge { width:74px; height:74px; border-radius:22px; font-size:38px; display:flex; align-items:center;
+    justify-content:center; background:linear-gradient(135deg,var(--accent1),var(--accent2));
+    box-shadow:0 12px 44px rgba(10,132,255,.35); margin-bottom:4px; }
   #gate { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:14px; padding:24px; text-align:center; z-index:20; }
   #gate h1 { font-size:20px; margin:0; } #gate p { color:var(--muted); margin:0; font-size:14px; }
@@ -64,14 +109,31 @@
     color:var(--text); padding:9px 16px; border-radius:20px; font-size:14px; z-index:30; opacity:0;
     transition:opacity .25s; pointer-events:none; }
   #toast.show { opacity:1; }
+  /* chat drawer (ChatGPT-style conversations) */
+  #drawerOverlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:15; }
+  #drawer { position:fixed; top:0; left:0; bottom:0; width:min(82vw,320px); z-index:16;
+    background:#0e1a22; border-right:1px solid #1c2a33; display:flex; flex-direction:column;
+    box-shadow:0 0 40px rgba(0,0,0,.55); }
+  .drawer-head { display:flex; align-items:center; justify-content:space-between;
+    padding:max(env(safe-area-inset-top),12px) 12px 12px 16px; border-bottom:1px solid #1c2a33;
+    font-weight:600; font-size:16px; }
+  #newChatBtn { font-size:24px; line-height:1; }
+  #chatList { flex:1; overflow-y:auto; padding:8px; }
+  .chat-row { display:flex; align-items:center; gap:2px; border-radius:12px; padding:2px; }
+  .chat-row.active { background:#16242d; }
+  .chat-title { flex:1; min-width:0; text-align:left; border:none; background:none; color:var(--text);
+    font-size:15px; padding:10px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chat-act { border:none; background:none; color:var(--muted); font-size:14px; padding:9px 7px;
+    cursor:pointer; border-radius:8px; flex:0 0 auto; }
+  .chat-act:active { background:#1c2a33; }
   .hidden { display:none !important; }
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <span style="width:38px"></span>
-    <div class="title">Study Assistant<small>your private line · always on</small></div>
+    <button class="iconbtn" id="drawerBtn" aria-label="Chats">☰</button>
+    <div class="title">Study Assistant<small><span class="onlinedot"></span>online · always on</small></div>
     <button class="iconbtn" id="menuBtn" aria-label="Menu">⋯</button>
   </header>
   <div id="menu" class="hidden">
@@ -82,13 +144,35 @@
     <button id="mClear">🗑️ <span>Clear chat</span></button>
   </div>
   <div id="log"></div>
+  <div id="chips" class="hidden">
+    <button data-msg="what's due this week?">📅 What's due?</button>
+    <button data-msg="how are my grades looking?">📊 My grades</button>
+    <button data-msg="help me build an essay blueprint to get started">📝 Essay blueprint</button>
+    <button data-msg="what's on my syllabus?">📖 Syllabus</button>
+  </div>
+  <div id="previews" class="hidden"></div>
   <footer>
+    <button class="iconbtn" id="attach" aria-label="Attach a picture or document">📎</button>
+    <input type="file" id="file" multiple accept="image/*,.pdf,.doc,.docx,.txt,.html" hidden />
     <textarea id="text" rows="1" placeholder="Message" autocomplete="off"></textarea>
     <button id="send" aria-label="Send">↑</button>
   </footer>
 </div>
 
+<div id="drawerOverlay" class="hidden"></div>
+<aside id="drawer" class="hidden">
+  <div class="drawer-head"><span>Chats</span>
+    <button class="iconbtn" id="newChatBtn" aria-label="New chat">＋</button></div>
+  <div id="chatList"></div>
+</aside>
+
+<div id="deckOverlay" class="hidden">
+  <button id="deckClose" aria-label="Close">✕</button>
+  <iframe title="Study deck"></iframe>
+</div>
+
 <div id="gate">
+  <div class="gate-badge">🎓</div>
   <h1>Study Assistant</h1>
   <p>Enter your passcode to unlock the chat.</p>
   <input id="pass" type="password" inputmode="text" placeholder="passcode" autocomplete="off" />
@@ -103,22 +187,58 @@ const ta = document.getElementById('text');
 const sendBtn = document.getElementById('send');
 const gate = document.getElementById('gate');
 const menu = document.getElementById('menu');
+const chips = document.getElementById('chips');
 let KEY = localStorage.getItem('chatKey') || '';
 let lastId = 0, busy = false, deferredInstall = null, vapidKey = '';
+let pendingFiles = [], currentGen = null, controller = null;
+let currentChat = parseInt(localStorage.getItem('chatId') || '') || null;
 
 const CLEAR_RE = /^(clear|clear chat|clear all|clear everything|reset)$/i;
 function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+// Turn bare http(s) URLs in already-escaped text into tappable links (so a
+// syllabus/assignment link the assistant drops in is clickable, not dead text).
+function linkify(s){
+  return s.replace(/https?:\/\/[^\s<]+/g, (u)=>{
+    let trail=''; const m=u.match(/[.,;:!?)\]]+$/);
+    if (m){ trail=m[0]; u=u.slice(0,-trail.length); }
+    return `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`+trail;
+  });
+}
 function atBottom(){ return log.scrollHeight - log.scrollTop - log.clientHeight < 80; }
 function toBottom(){ log.scrollTop = log.scrollHeight; }
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200); }
+// Quick-start chips: visible only until you've said something.
+function updateChips(){ chips.classList.toggle('hidden', !!log.querySelector('.row.me')); }
+chips.querySelectorAll('button').forEach(b=> b.addEventListener('click', ()=>{ if(!busy) send(b.dataset.msg); }));
+// Study deck: open the link in a full-screen in-app overlay (no leaving the app).
+const deckOverlay = document.getElementById('deckOverlay');
+const deckFrame = deckOverlay.querySelector('iframe');
+log.addEventListener('click', e=>{ const b=e.target.closest('.deckbtn'); if(b){ openDeck(b.dataset.url); } });
+function openDeck(url){ deckFrame.src = url; deckOverlay.classList.remove('hidden'); }
+function closeDeck(){ deckOverlay.classList.add('hidden'); deckFrame.src = 'about:blank'; }
+document.getElementById('deckClose').addEventListener('click', closeDeck);
 
+const STUDY_RE = /https?:\/\/[^\s]*\/study\/[0-9a-f]+/i;
 function addBubble(role, text, media){
   const stick = atBottom();
   const row = document.createElement('div');
   row.className = 'row ' + (role === 'user' ? 'me' : 'them');
-  let inner = esc(text || '');
-  if (media) inner += `<a class="doc" href="${esc(media)}" target="_blank" rel="noopener">📄 Open file</a>`;
+  text = text || '';
+  // Upgrade a study link into a tappable deck card that opens inside the app.
+  let studyUrl = null, display = text;
+  if (role !== 'user'){
+    const m = text.match(STUDY_RE);
+    if (m){ studyUrl = m[0]; display = text.replace(studyUrl, '').replace(/[\s:—-]+$/, '').trim(); }
+  }
+  let inner = linkify(esc(display));
+  if (studyUrl){
+    const exam = !/flashcard/i.test(text);  // study links are quizzes unless they say flashcards
+    inner += `<button class="deckbtn" data-url="${esc(studyUrl)}">`
+      + `<span class="dt">${exam ? '📝 Quiz' : '📇 Flashcards'}</span>`
+      + `<span class="ds">tap to study →</span></button>`;
+  }
+  if (media) inner += `<a class="doc" href="${esc(media)}" target="_blank" rel="noopener" download>📄 Download</a>`;
   row.innerHTML = `<div class="bubble">${inner}</div>`;
   log.appendChild(row);
   if (stick || role === 'user') toBottom();
@@ -139,38 +259,146 @@ async function api(path, opts={}){
 function lockOut(){ localStorage.removeItem('chatKey'); KEY=''; gate.classList.remove('hidden');
   document.getElementById('gateErr').textContent = 'Wrong passcode — try again.'; }
 
+function chatParam(){ return currentChat ? ('&chat_id=' + currentChat) : ''; }
 async function loadHistory(){
-  const r = await api('/chat/messages?after=0'); const data = await r.json();
+  const r = await api('/chat/messages?after=0' + chatParam()); const data = await r.json();
+  if (data.chat_id){ currentChat = data.chat_id; localStorage.setItem('chatId', currentChat); }
   log.innerHTML = ''; lastId = 0;
   for (const m of data.messages){ addBubble(m.role, m.text, m.media_url); lastId = Math.max(lastId, m.id); }
-  toBottom();
+  toBottom(); updateChips();
 }
 async function poll(){
   if (busy || !KEY) return;
-  try { const r = await api('/chat/messages?after=' + lastId); const data = await r.json();
+  try { const r = await api('/chat/messages?after=' + lastId + chatParam()); const data = await r.json();
     for (const m of data.messages){ addBubble(m.role, m.text, m.media_url); lastId = Math.max(lastId, m.id); }
   } catch(e){}
 }
+
+// ---- chat drawer (multiple conversations) ----
+const drawer = document.getElementById('drawer');
+const drawerOverlay = document.getElementById('drawerOverlay');
+const chatList = document.getElementById('chatList');
+function openDrawer(){ drawer.classList.remove('hidden'); drawerOverlay.classList.remove('hidden'); fetchChats(); }
+function closeDrawer(){ drawer.classList.add('hidden'); drawerOverlay.classList.add('hidden'); }
+document.getElementById('drawerBtn').addEventListener('click', openDrawer);
+drawerOverlay.addEventListener('click', closeDrawer);
+document.getElementById('newChatBtn').addEventListener('click', newChat);
+async function fetchChats(){
+  try { const r = await api('/chats'); const data = await r.json(); renderChats(data.chats || []); } catch(e){}
+}
+function renderChats(chats){
+  chatList.innerHTML = '';
+  chats.forEach(c=>{
+    const row = document.createElement('div');
+    row.className = 'chat-row' + (c.id === currentChat ? ' active' : '');
+    const t = document.createElement('button'); t.className = 'chat-title';
+    t.textContent = c.title || 'New chat';
+    t.addEventListener('click', ()=> switchChat(c.id));
+    const ren = document.createElement('button'); ren.className = 'chat-act'; ren.textContent = '✎';
+    ren.title = 'Rename';
+    ren.addEventListener('click', e=>{ e.stopPropagation(); renameChat(c.id, c.title); });
+    const del = document.createElement('button'); del.className = 'chat-act'; del.textContent = '🗑';
+    del.title = 'Delete';
+    del.addEventListener('click', e=>{ e.stopPropagation(); deleteChat(c.id); });
+    row.append(t, ren, del); chatList.appendChild(row);
+  });
+}
+async function switchChat(id){
+  if (id === currentChat){ closeDrawer(); return; }
+  currentChat = id; localStorage.setItem('chatId', id);
+  closeDrawer(); await loadHistory();
+}
+async function newChat(){
+  try { const r = await api('/chats', { method:'POST' }); const data = await r.json();
+    currentChat = data.id; localStorage.setItem('chatId', data.id);
+    closeDrawer(); await loadHistory(); }
+  catch(e){}
+}
+async function renameChat(id, cur){
+  const name = prompt('Rename chat', cur || ''); if (name === null) return;
+  try { await api('/chats/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ title: name }) }); fetchChats(); } catch(e){}
+}
+async function deleteChat(id){
+  if (!confirm('Delete this chat?')) return;
+  try { await api('/chats/' + id, { method:'DELETE' });
+    if (id === currentChat){ currentChat = null; localStorage.removeItem('chatId'); await loadHistory(); }
+    fetchChats(); } catch(e){}
+}
 async function send(forced){
   const text = (forced !== undefined ? forced : ta.value).trim();
-  if (!text || busy) return;
-  busy = true; sendBtn.disabled = true;
-  const wasClear = CLEAR_RE.test(text.replace(/\s+/g,' ').trim());
+  if ((!text && pendingFiles.length === 0) || busy) return;
+  busy = true; updateSendButton();
+  const files = pendingFiles.slice();
+  const wasClear = files.length === 0 && CLEAR_RE.test(text.replace(/\s+/g,' ').trim());
   if (forced === undefined){ ta.value=''; ta.style.height='auto'; }
-  addBubble('user', text, ''); showTyping();
+  const names = files.map(f=>f.name).join(', ');
+  const display = files.length ? (text ? text+'\n📎 '+names : '📎 '+names) : text;
+  addBubble('user', display, ''); clearPending(); showTyping();
+  currentGen = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())+Math.random();
+  controller = new AbortController();
   try {
     const r = await api('/chat/send', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({text}) });
+      body: JSON.stringify({text, attachments: files, gen_id: currentGen, chat_id: currentChat}),
+      signal: controller.signal });
     const data = await r.json(); hideTyping();
+    if (data.chat_id){ currentChat = data.chat_id; localStorage.setItem('chatId', currentChat); }
     if (wasClear){ log.innerHTML=''; lastId=0; toast('Chat cleared');
       for (const m of data.messages){ addBubble(m.role, m.text, m.media_url); lastId = Math.max(lastId, m.id); }
     } else for (const m of data.messages){
       if (m.role === 'assistant') addBubble(m.role, m.text, m.media_url);
       lastId = Math.max(lastId, m.id);
     }
-  } catch(e){ hideTyping(); if (KEY) addBubble('assistant', '⚠️ connection hiccup — try again.', ''); }
-  finally { busy=false; sendBtn.disabled=false; toBottom(); }
+    if (!drawer.classList.contains('hidden')) fetchChats();  // keep titles fresh if open
+  } catch(e){ hideTyping();
+    // Aborted = the user hit stop; the server discards that reply, so stay quiet.
+    if (e && e.name === 'AbortError'){ toast('Stopped'); }
+    else if (KEY) addBubble('assistant', '⚠️ connection hiccup — try again.', '');
+  }
+  finally { busy=false; controller=null; currentGen=null; updateSendButton(); toBottom(); updateChips(); }
 }
+
+// Send button doubles as a Stop button while a reply is in flight.
+function updateSendButton(){
+  sendBtn.disabled = false;
+  if (busy){ sendBtn.textContent='■'; sendBtn.classList.add('stop'); sendBtn.setAttribute('aria-label','Stop'); }
+  else { sendBtn.textContent='↑'; sendBtn.classList.remove('stop'); sendBtn.setAttribute('aria-label','Send'); }
+}
+function cancelSend(){
+  if (controller){ try { controller.abort(); } catch(e){} }
+  if (currentGen){ fetch('/chat/cancel', { method:'POST',
+    headers:{'X-Chat-Key':KEY,'Content-Type':'application/json'},
+    body: JSON.stringify({gen_id: currentGen}) }).catch(()=>{}); }
+}
+
+// ---- attachments (pictures / documents) ----
+const fileInput = document.getElementById('file');
+const previews = document.getElementById('previews');
+document.getElementById('attach').addEventListener('click', ()=> fileInput.click());
+fileInput.addEventListener('change', ()=>{ addFiles(fileInput.files); fileInput.value=''; });
+function addFiles(list){
+  for (const f of list){
+    if (f.size > 12*1024*1024){ toast(`${f.name} is too big (max 12MB)`); continue; }
+    const reader = new FileReader();
+    reader.onload = ()=>{ const r=reader.result||''; const i=r.indexOf(',');
+      pendingFiles.push({ name:f.name, content_type:f.type||'', data: i>=0 ? r.slice(i+1) : r });
+      renderPreviews(); };
+    reader.readAsDataURL(f);
+  }
+}
+function renderPreviews(){
+  previews.innerHTML='';
+  previews.classList.toggle('hidden', pendingFiles.length===0);
+  pendingFiles.forEach((f, idx)=>{
+    const chip=document.createElement('div'); chip.className='chip';
+    const isImg=(f.content_type||'').startsWith('image/');
+    chip.innerHTML=`<span>${isImg?'🖼️':'📄'} ${esc(f.name)}</span>`;
+    const x=document.createElement('button'); x.textContent='✕'; x.setAttribute('aria-label','Remove');
+    x.addEventListener('click', ()=>{ pendingFiles.splice(idx,1); renderPreviews(); });
+    chip.appendChild(x); previews.appendChild(chip);
+  });
+}
+function clearPending(){ pendingFiles=[]; renderPreviews(); }
 
 // ---- menu ----
 function closeMenu(){ menu.classList.add('hidden'); }
@@ -230,7 +458,7 @@ document.getElementById('mNotify').addEventListener('click', async ()=>{ closeMe
 // ---- input wiring ----
 ta.addEventListener('input', ()=>{ ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,120)+'px'; });
 ta.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } });
-sendBtn.addEventListener('click', ()=> send());
+sendBtn.addEventListener('click', ()=> { if (busy) cancelSend(); else send(); });
 
 document.getElementById('unlock').addEventListener('click', ()=>{
   const v = document.getElementById('pass').value.trim(); if (!v) return;

@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: canvas-study-assistant
+    runtime: python
+    plan: free            # bump to "starter" for always-on (no cold starts; reminders fire reliably)
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:create_app --factory --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: CHANNEL
+        value: web
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: CANVAS_BASE_URL
+        value: https://canvas.uw.edu/api/v1
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-4-6
+      - key: BRAIN_MODEL
+        value: claude-sonnet-4-6
+      - key: VAPID_CLAIM_EMAIL
+        value: mailto:vladbani@microsoft.com
+      # PUBLIC_BASE_URL is auto-detected from RENDER_EXTERNAL_URL — leave unset.
+      # Secrets below are entered in the Render dashboard (not stored in git):
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CANVAS_TOKEN
+        sync: false
+      - key: WEB_CHAT_SECRET
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false

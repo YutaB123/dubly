@@ -60,9 +60,11 @@ class FakeBrain:
     def __init__(self, reply="hw4 is due tue 11:59pm"):
         self.reply = reply
         self.seen = []
+        self.attachments_seen = []
 
-    def respond(self, user_text, history=None):
+    def respond(self, user_text, history=None, attachments=None):
         self.seen.append((user_text, history))
+        self.attachments_seen.append(attachments)
         return self.reply
 
 
@@ -309,6 +311,181 @@ def test_bad_signature_is_rejected(tmp_path):
     )
     assert resp.status_code == 403
     assert brain.seen == []
+
+
+class FakeCanvasCourses:
+    """Mirrors the messy real Canvas list: real classes + resource sites + archived."""
+
+    def list_courses(self):
+        from app.canvas import Course
+        return [
+            Course(id=1, name="CSE 163 A Sp 26: Intermediate Data Programming", code="CSE 163 A"),
+            Course(id=2, name="MATH 124 A and B Sp 26: Calculus With Analytic Geometry I",
+                   code="MATH 124 A and B"),
+            Course(id=3, name="PHIL 149 Sp 26", code="PHIL 149 Sp 26"),
+            Course(id=4, name="Informatics Resource Site", code="Informatics Resource"),
+            Course(id=5, name="ARCHIVED: ENGL 258, Autumn '25", code="ARCHIVED: ENGL 258 A"),
+        ]
+
+
+def _web_chat_client(tmp_path, canvas=None):
+    from app.db import ChatStore
+    from app.webchat import WebClient
+
+    chats = ChatStore(tmp_path / "chats.sqlite")
+    sms = WebClient(chats)
+    brain = FakeBrain()
+    deps = AppDeps(
+        sms=sms, brain=brain,
+        conversation=ConversationStore(tmp_path / "c.sqlite"),
+        study=StudyPageStore(tmp_path / "s.sqlite"),
+        require_signature=False, validate=lambda u, f, s: True,
+        chats=chats, web_chat_secret="k", canvas=canvas,
+    )
+    return TestClient(build_app(deps)), brain, chats
+
+
+def test_opening_message_lists_real_classes_only(tmp_path):
+    client, brain, webchat = _web_chat_client(tmp_path, canvas=FakeCanvasCourses())
+    resp = client.get("/chat/messages?after=0", headers={"X-Chat-Key": "k"})
+    greeting = resp.json()["messages"][0]["text"]
+    assert "enrolled" in greeting.lower()
+    # Real classes show with a clean code + title (no term-code clutter):
+    assert "CSE 163: Intermediate Data Programming" in greeting
+    assert "MATH 124: Calculus With Analytic Geometry I" in greeting
+    assert "PHIL 149" in greeting
+    # Resource sites and archived courses are filtered out:
+    assert "Informatics Resource" not in greeting
+    assert "ARCHIVED" not in greeting
+    assert "—" not in greeting  # no em dashes anywhere
+
+
+def test_opening_message_falls_back_without_canvas(tmp_path):
+    client, brain, webchat = _web_chat_client(tmp_path, canvas=None)
+    resp = client.get("/chat/messages?after=0", headers={"X-Chat-Key": "k"})
+    greeting = resp.json()["messages"][0]["text"]
+    assert "study assistant" in greeting.lower()
+    assert "—" not in greeting
+
+
+def test_chat_send_passes_uploaded_image_to_brain(tmp_path):
+    import base64
+
+    client, brain, webchat = _web_chat_client(tmp_path)
+    img_b64 = base64.b64encode(b"img-bytes").decode()
+    resp = client.post(
+        "/chat/send",
+        headers={"X-Chat-Key": "k"},
+        json={
+            "text": "what is this?",
+            "attachments": [
+                {"name": "p.png", "content_type": "image/png", "data": img_b64}
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    assert brain.seen[0][0] == "what is this?"
+    # The endpoint decoded the base64 and handed the brain real bytes.
+    assert brain.attachments_seen[0] == [("p.png", "image/png", b"img-bytes")]
+
+
+def test_chat_send_with_only_a_file_and_no_text_still_reaches_the_brain(tmp_path):
+    import base64
+
+    client, brain, webchat = _web_chat_client(tmp_path)
+    pdf_b64 = base64.b64encode(b"%PDF-1.4").decode()
+    resp = client.post(
+        "/chat/send",
+        headers={"X-Chat-Key": "k"},
+        json={
+            "text": "",
+            "attachments": [
+                {"name": "hw.pdf", "content_type": "application/pdf", "data": pdf_b64}
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    assert brain.attachments_seen[0] == [("hw.pdf", "application/pdf", b"%PDF-1.4")]
+
+
+def test_send_with_unknown_chat_id_creates_new_chat_not_hijacks(tmp_path):
+    client, brain, chats = _web_chat_client(tmp_path)
+    a = chats.create_chat()
+    chats.append(a, "user", "secret in A")
+    r = client.post(
+        "/chat/send", headers={"X-Chat-Key": "k"},
+        json={"text": "hello", "chat_id": 999999},
+    )
+    new_cid = r.json()["chat_id"]
+    assert new_cid not in (a, 999999)  # neither hijacked A nor used the bogus id
+    # Chat A is untouched.
+    assert [m["text"] for m in chats.since(a, 0)] == ["secret in A"]
+
+
+def test_new_chat_endpoint_seeds_a_greeting(tmp_path):
+    client, brain, chats = _web_chat_client(tmp_path, canvas=FakeCanvasCourses())
+    cid = client.post("/chats", headers={"X-Chat-Key": "k"}).json()["id"]
+    msgs = chats.since(cid, 0)
+    assert msgs and msgs[0]["role"] == "assistant"
+    assert "enrolled" in msgs[0]["text"].lower()
+
+
+def test_rename_unknown_chat_is_404(tmp_path):
+    client, brain, chats = _web_chat_client(tmp_path)
+    r = client.patch("/chats/888888", headers={"X-Chat-Key": "k"}, json={"title": "x"})
+    assert r.status_code == 404
+
+
+def test_cancelled_generation_is_not_added_to_the_transcript(tmp_path):
+    client, brain, webchat = _web_chat_client(tmp_path)
+    # The user hit "stop" before the reply landed: cancel the gen id first.
+    client.post("/chat/cancel", headers={"X-Chat-Key": "k"}, json={"gen_id": "g1"})
+    resp = client.post(
+        "/chat/send",
+        headers={"X-Chat-Key": "k"},
+        json={"text": "what's due?", "gen_id": "g1"},
+    )
+    assert resp.status_code == 200
+    # The user's message shows, but the cancelled assistant reply was discarded.
+    msgs = resp.json()["messages"]
+    assert any(m["role"] == "user" for m in msgs)
+    assert not any(m["role"] == "assistant" for m in msgs)
+
+
+def test_uncancelled_generation_still_replies(tmp_path):
+    client, brain, webchat = _web_chat_client(tmp_path)
+    resp = client.post(
+        "/chat/send",
+        headers={"X-Chat-Key": "k"},
+        json={"text": "what's due?", "gen_id": "g2"},
+    )
+    msgs = resp.json()["messages"]
+    assert any(m["role"] == "assistant" for m in msgs)
+
+
+class FakeStudyService:
+    def __init__(self):
+        self.calls = []
+
+    def regenerate(self, page_id):
+        self.calls.append(page_id)
+        return page_id == "good"
+
+
+def test_study_regenerate_endpoint(tmp_path):
+    sms = FakeSms()
+    svc = FakeStudyService()
+    deps = AppDeps(
+        sms=sms, brain=FakeBrain(),
+        conversation=ConversationStore(tmp_path / "c.sqlite"),
+        study=StudyPageStore(tmp_path / "s.sqlite"),
+        require_signature=False, validate=lambda u, f, s: True,
+        study_service=svc,
+    )
+    client = TestClient(build_app(deps))
+    assert client.post("/study/good/regenerate").json() == {"ok": True}
+    assert client.post("/study/bad/regenerate").status_code == 404
+    assert svc.calls == ["good", "bad"]
 
 
 def test_study_page_served_when_present(tmp_path):

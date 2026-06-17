@@ -1,24 +1,30 @@
-"""Make a document (PDF) from text and send it over WhatsApp.
+"""Make a downloadable Word (.docx) document from text and send it to the student.
 
-The brain writes the content; this turns it into a PDF, sends it as a WhatsApp
-attachment, and also drops a copy in the student's OneDrive folder.
+The brain writes the content; this turns it into a real .docx (openable/editable in
+Word or Google Docs), sends it as a downloadable link, and drops a copy in OneDrive.
 """
 
 from __future__ import annotations
 
+import io
 import re
 import uuid
+import zipfile
+from xml.sax.saxutils import escape
 
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
 DOCUMENT_TOOLS = [
     {
         "name": "make_document",
-        "description": "Create a document (PDF) from text and SEND it to the student over "
-        "WhatsApp (also saved to their files folder). Use whenever they ask you to write "
-        "something up as a file or document — a study guide, summary, notes, outline, "
-        "cheat sheet, essay draft, etc. You write the full content yourself in 'content'.",
+        "description": "Create a downloadable Word (.docx) document from text and SEND it to the "
+        "student (also saved to their files folder). Use whenever they ask you to write "
+        "something up as a file or document they can download — a study guide, summary, notes, "
+        "outline, cheat sheet, essay blueprint, etc. You write the full content yourself in "
+        "'content'.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -63,9 +69,57 @@ def render_pdf(title: str, content: str) -> bytes:
     return bytes(pdf.output())
 
 
+# --- Word .docx (a minimal, valid OOXML package, stdlib only) ----------------
+
+_CONTENT_TYPES = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    '<Default Extension="xml" ContentType="application/xml"/>'
+    '<Override PartName="/word/document.xml" '
+    'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+    "</Types>"
+)
+
+_RELS = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    '<Relationship Id="rId1" '
+    'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+    'Target="word/document.xml"/></Relationships>'
+)
+
+_W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+
+def _paragraph(text: str, bold: bool = False, size: int | None = None) -> str:
+    rpr = ""
+    if bold or size:
+        rpr = "<w:rPr>" + ("<w:b/>" if bold else "") + (
+            f'<w:sz w:val="{size}"/>' if size else ""
+        ) + "</w:rPr>"
+    return f'<w:p><w:r>{rpr}<w:t xml:space="preserve">{escape(text)}</w:t></w:r></w:p>'
+
+
+def render_docx(title: str, content: str) -> bytes:
+    """A real Word .docx: bold title, then one paragraph per line of content."""
+    paras = [_paragraph(title, bold=True, size=32)]
+    paras += [_paragraph(line) for line in content.split("\n")]
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<w:document xmlns:w="{_W_NS}"><w:body>{"".join(paras)}</w:body></w:document>'
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", _CONTENT_TYPES)
+        z.writestr("_rels/.rels", _RELS)
+        z.writestr("word/document.xml", document_xml)
+    return buf.getvalue()
+
+
 def _safe_name(title: str) -> str:
     name = re.sub(r"[^\w\- ]", "", title).strip() or "document"
-    return f"{name}.pdf"
+    return f"{name}.docx"
 
 
 class DocumentService:
@@ -86,14 +140,14 @@ class DocumentService:
             return f"(unknown document tool: {name})"
         title = (tool_input.get("title") or "document").strip()
         content = tool_input.get("content") or ""
-        data = render_pdf(title, content)
+        data = render_docx(title, content)
         filename = _safe_name(title)
         file_id = uuid.uuid4().hex
-        self.files.save(file_id, filename, "application/pdf", data)
+        self.files.save(file_id, filename, DOCX_MIME, data)
         # Also drop a copy in their OneDrive folder (so it's on the laptop too).
         if self.onedrive is not None:
             try:
-                self.onedrive.upload(filename, data, "application/pdf")
+                self.onedrive.upload(filename, data, DOCX_MIME)
             except Exception:
                 pass
         self.sms.send(

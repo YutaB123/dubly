@@ -323,6 +323,30 @@ def test_get_syllabus_unknown_course_returns_empty():
     assert make_client(handler).get_syllabus("art history") == ""
 
 
+def test_course_web_url_strips_api_path():
+    client = make_client(lambda r: httpx.Response(200, json=[]))
+    assert client.course_web_url(5) == "https://canvas.uw.edu/courses/5"
+
+
+def test_syllabus_url_builds_web_link_from_course_code():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[
+            {"id": 9, "name": "Existentialism and Film", "course_code": "PHIL 149 Sp 26"},
+        ])
+
+    client = make_client(handler)
+    assert client.syllabus_url("phil 149") == (
+        "https://canvas.uw.edu/courses/9/assignments/syllabus"
+    )
+
+
+def test_syllabus_url_unknown_course_is_empty():
+    client = make_client(lambda r: httpx.Response(200, json=[
+        {"id": 1, "name": "Stats", "course_code": "STAT 311"},
+    ]))
+    assert client.syllabus_url("art history") == ""
+
+
 def test_get_calendar_events_parses_and_sorts():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v1/courses":

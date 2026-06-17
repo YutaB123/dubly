@@ -21,6 +21,28 @@ import httpx
 CACHE_TTL_SECONDS = 120
 
 
+# --- What counts as a "class" ------------------------------------------------
+
+# A real class has a department code + a 3-digit number: PHIL 149, MATH 124,
+# CSE 163. Resource sites, career guides, placement pages, and similar have no
+# such code and are NOT classes — they must never be listed, counted, or graded.
+_CLASS_CODE_RE = re.compile(r"[A-Z&]{2,}\s?\d{3}")
+
+
+def short_course_code(code: str) -> str:
+    """'CSE 163 A Sp 26' -> 'CSE 163'. Falls back to the trimmed input if no match."""
+    m = _CLASS_CODE_RE.search(code or "")
+    return m.group(0) if m else (code or "").strip()
+
+
+def is_real_class(code: str) -> bool:
+    """True only for real classes (department + 3-digit number), never archived ones."""
+    text = code or ""
+    if "archived" in text.lower():
+        return False
+    return bool(_CLASS_CODE_RE.search(text))
+
+
 # --- Data shapes -------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -176,9 +198,23 @@ def is_done(planner_entry: dict) -> bool:
 class CanvasClient:
     def __init__(self, base_url: str, token: str, http: httpx.Client | None = None):
         self.base_url = base_url.rstrip("/")
+        # The student-facing web origin (no "/api/v1"), used to build clickable
+        # Canvas page links the assistant can hand back, e.g. a syllabus page.
+        self.web_base = self.base_url.removesuffix("/api/v1")
         self.token = token
         self._http = http or httpx.Client(base_url=self.base_url, timeout=20.0)
         self._cache: dict = {}
+
+    def course_web_url(self, course_id) -> str:
+        """The student-facing Canvas URL for a course's home page."""
+        return f"{self.web_base}/courses/{course_id}"
+
+    def syllabus_url(self, course: str) -> str:
+        """The student-facing Canvas URL for a course's syllabus page (or "")."""
+        cid = self._resolve_course_id(course)
+        if cid is None:
+            return ""
+        return f"{self.web_base}/courses/{cid}/assignments/syllabus"
 
     def _cached(self, key, fetch):
         """Return a recent cached value for `key`, or fetch and store it."""
@@ -264,6 +300,66 @@ class CanvasClient:
             return ""
         return html_to_text(data.get("syllabus_body"))
 
+    def get_study_material(self, course: str) -> tuple[str, str]:
+        """Gather a course-wide 'study packet' for exam prep: syllabus + the topic
+        outline (modules and their items) + the assignment list. Returns
+        (course_label, source_text); source_text is length-budgeted. This is the
+        source for flashcards / practice exams, so a 'final exam' deck reflects the
+        whole course rather than one thin assignment description."""
+        cid = self._resolve_course_id(course)
+        if cid is None:
+            return course, ""
+        label = next((c.code for c in self.list_courses() if c.id == cid), course)
+        material = self._cached(
+            ("study_material", cid), lambda: self._build_study_material(cid)
+        )
+        return label, material
+
+    def _build_study_material(self, cid: int) -> str:
+        parts: list[str] = []
+
+        syllabus = self._fetch_syllabus(cid)
+        if syllabus:
+            parts.append("## Syllabus\n" + syllabus[:4000])
+
+        try:
+            modules = self.canvas_get(
+                f"/courses/{cid}/modules", {"include[]": "items", "per_page": 50}
+            )
+        except Exception:
+            modules = []
+        topic_lines: list[str] = []
+        if isinstance(modules, list):
+            for m in modules:
+                mname = (m.get("name") or "").strip()
+                if mname:
+                    topic_lines.append(f"- {mname}")
+                for it in m.get("items") or []:
+                    title = (it.get("title") or "").strip()
+                    if title:
+                        topic_lines.append(f"  - {title}")
+        if topic_lines:
+            parts.append("## Topic outline (course modules)\n" + "\n".join(topic_lines[:200]))
+
+        try:
+            assignments = self.canvas_get(
+                f"/courses/{cid}/assignments", {"per_page": 100}
+            )
+        except Exception:
+            assignments = []
+        a_lines: list[str] = []
+        if isinstance(assignments, list):
+            for a in assignments:
+                an = (a.get("name") or "").strip()
+                if not an:
+                    continue
+                desc = " ".join(html_to_text(a.get("description") or "").split())[:200]
+                a_lines.append(f"- {an}" + (f": {desc}" if desc else ""))
+        if a_lines:
+            parts.append("## Assignments\n" + "\n".join(a_lines[:120]))
+
+        return "\n\n".join(parts)[:12000]
+
     def get_grades(self) -> list[Grade]:
         """The student's current grade in each graded course."""
         return self._cached("grades", self._fetch_grades)
@@ -293,35 +389,11 @@ class CanvasClient:
 
     def _attachment_text(self, filename: str, content_type: str, data: bytes) -> str:
         """Pull readable text out of a submitted file (docx / pdf / txt / html)."""
-        name = (filename or "").lower()
-        ct = (content_type or "").lower()
-        if name.endswith(".txt") or "text/plain" in ct:
-            return data.decode("utf-8", "replace")
-        if name.endswith(".docx"):
-            import io
-            import zipfile
+        # Shared with the web-upload path; imported lazily to avoid a circular import
+        # (app.attachments imports html_to_text from this module).
+        from app.attachments import extract_text
 
-            try:
-                z = zipfile.ZipFile(io.BytesIO(data))
-                xml = z.read("word/document.xml").decode("utf-8", "replace")
-                xml = re.sub(r"</w:p>", "\n", xml)
-                parts = re.findall(r"<w:t[^>]*>(.*?)</w:t>", xml, re.S)
-                return html_module.unescape("".join(parts))
-            except Exception:
-                return ""
-        if name.endswith(".pdf") or "pdf" in ct:
-            import io
-
-            try:
-                from pypdf import PdfReader
-
-                reader = PdfReader(io.BytesIO(data))
-                return "\n".join((p.extract_text() or "") for p in reader.pages)
-            except Exception:
-                return ""
-        if name.endswith((".html", ".htm")) or "html" in ct:
-            return html_to_text(data.decode("utf-8", "replace"))
-        return ""
+        return extract_text(filename, content_type, data)
 
     def get_submission(self, course: str, assignment: str) -> Submission | None:
         """Read what the student submitted for an assignment, plus feedback."""

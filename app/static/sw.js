@@ -1,6 +1,6 @@
 // Service worker: caches the app shell, and shows push notifications so the
 // assistant can reach you even when the app is closed.
-const CACHE = 'studychat-v5';
+const CACHE = 'studychat-v13';
 const SHELL = ['/chat', '/manifest.webmanifest', '/static/icon-192.png'];
 
 self.addEventListener('install', e => {

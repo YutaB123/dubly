@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.main import AppDeps, build_app
-from app.db import ConversationStore, StudyPageStore, WebChatStore, PushStore
+from app.db import ConversationStore, StudyPageStore, WebChatStore, ChatStore, PushStore
 from app.webchat import WebClient
 
 
@@ -14,7 +14,7 @@ class FakeBrain:
         self.reply = reply
         self.seen = []
 
-    def respond(self, user_text, history=None):
+    def respond(self, user_text, history=None, attachments=None):
         self.seen.append((user_text, history))
         return self.reply
 
@@ -37,9 +37,9 @@ class FakePush:
 
 
 def make_web_client(tmp_path, secret="letmein", with_push=False, vapid="PUBKEY"):
-    store = WebChatStore(tmp_path / "web.sqlite")
+    chats = ChatStore(tmp_path / "chats.sqlite")
     push = FakePush(PushStore(tmp_path / "push.sqlite")) if with_push else None
-    sms = WebClient(store, push=push)
+    sms = WebClient(chats, push=push)
     brain = FakeBrain()
     deps = AppDeps(
         sms=sms,
@@ -48,12 +48,23 @@ def make_web_client(tmp_path, secret="letmein", with_push=False, vapid="PUBKEY")
         study=StudyPageStore(tmp_path / "s.sqlite"),
         require_signature=False,
         validate=lambda u, f, s: True,
-        webchat=store,
+        chats=chats,
         web_chat_secret=secret,
         push=push,
         vapid_public_key=vapid if with_push else "",
     )
-    return TestClient(build_app(deps)), store, brain, push
+    return TestClient(build_app(deps)), chats, brain, push
+
+
+# ---- WebClient -------------------------------------------------------------
+
+def test_webclient_send_strips_em_dashes(tmp_path):
+    chats = ChatStore(tmp_path / "w.sqlite")
+    cid = chats.ensure_chat()
+    WebClient(chats).send("CSE 163 — Homework 4 — due tue 11:59pm")
+    text = chats.since(cid, 0)[-1]["text"]
+    assert "—" not in text
+    assert text == "CSE 163 - Homework 4 - due tue 11:59pm"
 
 
 # ---- WebChatStore ---------------------------------------------------------
@@ -73,10 +84,11 @@ def test_webchatstore_append_since_and_clear(tmp_path):
     assert s.since(0) == [] and s.max_id() == 0
 
 
-def test_webclient_send_writes_to_transcript(tmp_path):
-    s = WebChatStore(tmp_path / "w.sqlite")
-    WebClient(s).send("here's your essay:", media_url=["https://x/file/9"])
-    msgs = s.since(0)
+def test_webclient_send_writes_to_active_chat(tmp_path):
+    chats = ChatStore(tmp_path / "w.sqlite")
+    cid = chats.ensure_chat()
+    WebClient(chats).send("here's your essay:", media_url=["https://x/file/9"])
+    msgs = chats.since(cid, 0)
     assert msgs[0]["role"] == "assistant"
     assert msgs[0]["text"] == "here's your essay:"
     assert msgs[0]["media_url"] == "https://x/file/9"
@@ -117,12 +129,13 @@ def test_chat_send_returns_user_and_brain_reply(tmp_path):
 
 
 def test_chat_messages_polling_returns_new_only(tmp_path):
-    client, store, brain, _ = make_web_client(tmp_path)
+    client, chats, brain, _ = make_web_client(tmp_path)
     client.post("/chat/send", json={"text": "hi"}, headers={"X-Chat-Key": "letmein"})
-    last = store.max_id()
-    # a reminder fires later -> WebClient.send appends
-    WebClient(store).send("don't forget: hw4 due tonight")
-    r = client.get(f"/chat/messages?after={last}", headers={"X-Chat-Key": "letmein"})
+    cid = chats.ensure_chat()
+    last = chats.max_id(cid)
+    # a reminder fires later -> WebClient.send appends to the active/most-recent chat
+    WebClient(chats).send("don't forget: hw4 due tonight")
+    r = client.get(f"/chat/messages?after={last}&chat_id={cid}", headers={"X-Chat-Key": "letmein"})
     new = r.json()["messages"]
     assert len(new) == 1
     assert "hw4 due tonight" in new[0]["text"]
@@ -167,9 +180,10 @@ def test_pushstore_save_all_remove_clear(tmp_path):
 
 
 def test_webclient_send_triggers_push(tmp_path):
-    store = WebChatStore(tmp_path / "w.sqlite")
+    chats = ChatStore(tmp_path / "w.sqlite")
+    chats.ensure_chat()
     push = FakePush(PushStore(tmp_path / "p.sqlite"))
-    WebClient(store, push=push).send("you have a final tomorrow")
+    WebClient(chats, push=push).send("you have a final tomorrow")
     assert push.notes and push.notes[0][0] == "Study Assistant"
     assert "final tomorrow" in push.notes[0][1]
 

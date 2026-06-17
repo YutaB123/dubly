@@ -10,3 +10,7 @@ venv/
 
 # build artifacts
 *.zip
+
+# local-only (never commit)
+*.log
+deploy-secrets.local.txt

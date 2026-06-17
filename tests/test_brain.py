@@ -102,6 +102,29 @@ def test_history_is_included():
     assert sent[-1] == {"role": "user", "content": "what's that asking for?"}
 
 
+def test_attachments_make_a_multimodal_user_message():
+    brain, client, box = make_brain([
+        message("end_turn", [text_block("that's a related-rates problem")]),
+    ])
+    files = [("photo.png", "image/png", b"img-bytes")]
+    brain.respond("what is this?", attachments=files)
+
+    user_msg = client.calls[0]["messages"][-1]
+    assert user_msg["role"] == "user"
+    assert isinstance(user_msg["content"], list)
+    assert user_msg["content"][0]["type"] == "image"            # the picture
+    assert user_msg["content"][-1]["type"] == "text"            # the question
+    assert "what is this?" in user_msg["content"][-1]["text"]
+
+
+def test_no_attachments_keeps_a_plain_string_message():
+    brain, client, box = make_brain([
+        message("end_turn", [text_block("ok")]),
+    ])
+    brain.respond("hi")
+    assert client.calls[0]["messages"][-1]["content"] == "hi"
+
+
 def test_tool_loop_has_a_safety_limit():
     # Model keeps asking for tools forever; brain must stop and still answer.
     always_tool = message("tool_use", [tool_use_block("x", "get_upcoming", {})])

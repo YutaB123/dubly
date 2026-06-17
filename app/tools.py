@@ -15,7 +15,13 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from app import timefmt
-from app.canvas import AssignmentDetail, Course, Item
+from app.canvas import (
+    AssignmentDetail,
+    Course,
+    Item,
+    is_real_class,
+    short_course_code,
+)
 
 
 # --- Tool schemas (Phase 1: Canvas Q&A) --------------------------------------
@@ -276,9 +282,11 @@ class ToolBox:
 
     def _get_courses(self, _: dict) -> str:
         courses: list[Course] = self.canvas.list_courses()
+        # Only real classes (department + 3-digit number); drop resource sites etc.
+        courses = [c for c in courses if is_real_class(c.code)]
         if not courses:
             return "No active courses found."
-        return "\n".join(f"[{c.id}] {c.code}: {c.name}" for c in courses)
+        return "\n".join(f"[{c.id}] {short_course_code(c.code)}: {c.name}" for c in courses)
 
     def _get_upcoming(self, tool_input: dict) -> str:
         days = int(tool_input.get("days") or 7)
@@ -293,8 +301,9 @@ class ToolBox:
         due = timefmt.human_due(d.due_at, now=self._now())
         pts = f", {d.points:g} pts" if d.points is not None else ""
         header = f"{d.name} ({d.course}) — due {due}{pts}"
+        link = f"\nlink: {d.html_url}" if d.html_url else ""
         body = d.description or "(no description provided)"
-        return f"{header}\n{body}"
+        return f"{header}{link}\n{body}"
 
     def _canvas_api(self, tool_input: dict) -> str:
         import json
@@ -357,13 +366,15 @@ class ToolBox:
 
     def _get_grades(self, _: dict) -> str:
         grades = self.canvas.get_grades()
+        # Only real classes count toward grades; skip resource sites and the like.
+        grades = [g for g in grades if is_real_class(g.course)]
         if not grades:
             return "No grades posted yet."
         lines = []
         for g in grades:
-            score = f"{g.score:g}%" if g.score is not None else "—"
+            score = f"{g.score:g}%" if g.score is not None else "-"
             letter = f" ({g.grade})" if g.grade else ""
-            lines.append(f"{g.course}: {score}{letter}")
+            lines.append(f"{short_course_code(g.course)}: {score}{letter}")
         return "\n".join(lines)
 
     def _get_course_grades(self, tool_input: dict) -> str:
@@ -388,6 +399,10 @@ class ToolBox:
             return f"No syllabus found for {course!r}."
         if len(text) > 2500:
             text = text[:2500] + "…"
+        get_url = getattr(self.canvas, "syllabus_url", None)
+        url = get_url(course) if get_url else ""
+        if url:
+            text += f"\nlink: {url}"
         return text
 
     def _get_calendar(self, tool_input: dict) -> str:
@@ -400,7 +415,8 @@ class ToolBox:
     def _format_item(self, item: Item) -> str:
         due = timefmt.human_due(item.due_at, now=self._now())
         ref = f" [{item.ref}]" if item.ref else ""
-        return f"{item.course} — {item.title} — due {due}{ref}"
+        link = f" {item.html_url}" if item.html_url else ""
+        return f"{item.course} — {item.title} — due {due}{ref}{link}"
 
     def _format_event(self, e) -> str:
         when = timefmt.human_due(e.start_at, now=self._now())

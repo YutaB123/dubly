@@ -1,9 +1,14 @@
-"""Tests for the make-a-document (PDF) tool."""
+"""Tests for the make-a-document (Word .docx) tool."""
 
 from __future__ import annotations
 
-from app.documents import DocumentService, render_pdf
+import io
+import zipfile
+
+from app.documents import DocumentService, render_docx, render_pdf
 from app.db import FileStore
+
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 class FakeSms:
@@ -28,7 +33,26 @@ def test_render_pdf_returns_pdf_bytes_and_handles_unicode():
     assert len(data) > 200
 
 
-def test_make_document_sends_pdf_saves_and_copies_to_onedrive(tmp_path):
+def test_render_docx_is_a_valid_word_zip_with_the_text():
+    data = render_docx("My Title", "Hello world\n\nSecond paragraph")
+    assert data[:2] == b"PK"  # zip magic
+    z = zipfile.ZipFile(io.BytesIO(data))
+    names = z.namelist()
+    assert "[Content_Types].xml" in names
+    assert "word/document.xml" in names
+    doc = z.read("word/document.xml").decode("utf-8")
+    assert "My Title" in doc
+    assert "Hello world" in doc
+    assert "Second paragraph" in doc
+
+
+def test_render_docx_escapes_xml_special_characters():
+    data = render_docx("T", "a < b & c > d")
+    doc = zipfile.ZipFile(io.BytesIO(data)).read("word/document.xml").decode("utf-8")
+    assert "&lt;" in doc and "&amp;" in doc and "&gt;" in doc
+
+
+def test_make_document_sends_downloadable_docx_and_copies_to_onedrive(tmp_path):
     sms = FakeSms()
     files = FileStore(tmp_path / "f.sqlite")
     od = FakeOneDrive()
@@ -40,20 +64,20 @@ def test_make_document_sends_pdf_saves_and_copies_to_onedrive(tmp_path):
     })
     assert "sent" in out.lower()
 
-    # Sent to WhatsApp as media.
+    # Sent as a media link.
     text, media_url = sms.sent[0]
     assert "STAT 311 Study Guide" in text
     assert media_url[0].startswith("https://app.example/file/")
 
-    # Stored as a servable PDF.
+    # Stored as a servable Word document.
     fid = media_url[0].rsplit("/", 1)[1]
     filename, ctype, data = files.get(fid)
-    assert filename == "STAT 311 Study Guide.pdf"
-    assert ctype == "application/pdf"
-    assert data[:4] == b"%PDF"
+    assert filename == "STAT 311 Study Guide.docx"
+    assert ctype == DOCX_MIME
+    assert data[:2] == b"PK"
 
     # Also copied into the OneDrive folder.
-    assert od.uploaded and od.uploaded[0][0] == "STAT 311 Study Guide.pdf"
+    assert od.uploaded and od.uploaded[0][0] == "STAT 311 Study Guide.docx"
 
 
 def test_make_document_works_without_onedrive(tmp_path):

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import re
 
+from app.textfmt import no_em_dash
+
 MAX_SMS_LEN = 600  # comfortably long; keeps each send to a few segments
 
 
@@ -70,7 +72,7 @@ class SmsClient:
         self, text: str, to: str | None = None, media_url: list[str] | None = None
     ) -> None:
         from_, recipient = self._route(to)
-        chunks = _split(text) or [""]
+        chunks = _split(no_em_dash(text)) or [""]
         for i, chunk in enumerate(chunks):
             kwargs = {"body": chunk, "from_": from_, "to": recipient}
             # Attach the media to the first message only.

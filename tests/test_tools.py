@@ -16,6 +16,8 @@ class FakeCanvas:
         return [
             Course(id=1, name="Intermediate Data Programming", code="CSE 163 A"),
             Course(id=2, name="Linear Algebra", code="MATH 308"),
+            # Not a class (no 3-digit code) — must be filtered out everywhere.
+            Course(id=3, name="Informatics Resource Site", code="Informatics Resource"),
         ]
 
     def get_upcoming(self, days=7):
@@ -25,7 +27,7 @@ class FakeCanvas:
                 title="Homework 4",
                 due_at=datetime(2026, 6, 10, 6, 59, tzinfo=timezone.utc),
                 ref="1:55",
-                html_url="",
+                html_url="https://canvas.uw.edu/courses/1/assignments/55",
                 type="assignment",
             )
         ]
@@ -38,11 +40,14 @@ class FakeCanvas:
             due_at=datetime(2026, 6, 10, 6, 59, tzinfo=timezone.utc),
             points=20,
             description="Implement merge sort.",
-            html_url="",
+            html_url="https://canvas.uw.edu/courses/1/assignments/55",
         )
 
     def search_assignments(self, query, course_id=None):
         return []
+
+    def syllabus_url(self, course):
+        return "https://canvas.uw.edu/courses/9/assignments/syllabus"
 
     def canvas_get(self, path, params=None):
         return {"path": path, "params": params, "items": [1, 2, 3]}
@@ -93,6 +98,7 @@ class FakeCanvas:
         return [
             Grade(course="CSE 163 A", score=97.87, grade=None),
             Grade(course="STAT 311", score=92.0, grade="A-"),
+            Grade(course="Informatics Resource", score=100.0, grade=None),  # not a class
         ]
 
     def get_course_grades(self, course):
@@ -140,9 +146,19 @@ def test_dispatch_get_syllabus_passes_course_and_returns_text():
 
 def test_dispatch_get_grades_formats_scores():
     out = make_box().dispatch("get_grades", {})
-    assert "CSE 163 A" in out
+    assert "CSE 163" in out
     assert "97.87%" in out
     assert "A-" in out
+
+
+def test_dispatch_get_grades_excludes_non_classes():
+    out = make_box().dispatch("get_grades", {})
+    assert "Informatics" not in out  # no 3-digit code -> not a class
+
+
+def test_dispatch_get_courses_excludes_non_classes():
+    out = make_box().dispatch("get_courses", {})
+    assert "Informatics" not in out
 
 
 def test_dispatch_get_submission_includes_text_and_comments():
@@ -182,7 +198,7 @@ def test_dispatch_check_inbox_includes_subject_and_snippet():
 
 def test_dispatch_get_courses_lists_codes_and_names():
     out = make_box().dispatch("get_courses", {})
-    assert "CSE 163 A" in out
+    assert "CSE 163" in out               # shortened code (dept + 3 digits)
     assert "Intermediate Data Programming" in out
     assert "MATH 308" in out
 
@@ -193,6 +209,22 @@ def test_dispatch_get_upcoming_includes_due_phrasing_and_ref():
     assert "CSE 163 A" in out
     assert "Tue 11:59pm" in out  # formatted in Pacific
     assert "1:55" in out          # ref so Claude can fetch detail
+
+
+def test_dispatch_get_upcoming_includes_assignment_link():
+    # Claude needs the Canvas web link so it can offer it to the student.
+    out = make_box().dispatch("get_upcoming", {"days": 7})
+    assert "https://canvas.uw.edu/courses/1/assignments/55" in out
+
+
+def test_dispatch_get_assignment_detail_includes_link():
+    out = make_box().dispatch("get_assignment_detail", {"ref": "1:55"})
+    assert "https://canvas.uw.edu/courses/1/assignments/55" in out
+
+
+def test_dispatch_get_syllabus_includes_page_link():
+    out = make_box().dispatch("get_syllabus", {"course": "PHIL 149"})
+    assert "https://canvas.uw.edu/courses/9/assignments/syllabus" in out
 
 
 def test_dispatch_get_assignment_detail_passes_ref_through():

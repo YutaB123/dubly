@@ -57,22 +57,35 @@ class StudyPageStore:
             CREATE TABLE IF NOT EXISTS study_page (
                 id    TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
-                html  TEXT NOT NULL
+                html  TEXT NOT NULL,
+                meta  TEXT NOT NULL DEFAULT ''
             )
             """
         )
+        # Add the meta column to databases created before regeneration existed.
+        try:
+            self._db.execute("ALTER TABLE study_page ADD COLUMN meta TEXT NOT NULL DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         self._db.commit()
 
-    def save(self, page_id: str, title: str, html: str) -> None:
+    def save(self, page_id: str, title: str, html: str, meta: str = "") -> None:
         self._db.execute(
-            "INSERT OR REPLACE INTO study_page (id, title, html) VALUES (?, ?, ?)",
-            (page_id, title, html),
+            "INSERT OR REPLACE INTO study_page (id, title, html, meta) VALUES (?, ?, ?, ?)",
+            (page_id, title, html, meta),
         )
         self._db.commit()
 
     def get(self, page_id: str) -> str | None:
         row = self._db.execute(
             "SELECT html FROM study_page WHERE id = ?", (page_id,)
+        ).fetchone()
+        return row[0] if row else None
+
+    def get_meta(self, page_id: str) -> str | None:
+        """The JSON recipe used to build the page (for regeneration); None if no page."""
+        row = self._db.execute(
+            "SELECT meta FROM study_page WHERE id = ?", (page_id,)
         ).fetchone()
         return row[0] if row else None
 
@@ -129,6 +142,106 @@ class WebChatStore:
     def clear(self) -> None:
         self._db.execute("DELETE FROM web_chat")
         self._db.commit()
+
+
+class ChatStore:
+    """Multiple named conversations (ChatGPT-style), each with its own messages.
+
+    The web app uses this instead of a single transcript: the message list IS the
+    brain's memory for that chat, so switching chats switches context too.
+    """
+
+    _TITLE_MAX = 60
+
+    def __init__(self, path: str | Path):
+        self.path = str(path)
+        self._db = sqlite3.connect(self.path, check_same_thread=False)
+        self._db.execute(
+            "CREATE TABLE IF NOT EXISTS chat ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " title TEXT NOT NULL DEFAULT 'New chat')"
+        )
+        self._db.execute(
+            "CREATE TABLE IF NOT EXISTS message ("
+            " mid INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " chat_id INTEGER NOT NULL,"
+            " role TEXT NOT NULL,"
+            " text TEXT NOT NULL,"
+            " media_url TEXT NOT NULL DEFAULT '')"
+        )
+        self._db.commit()
+
+    # --- chats ---------------------------------------------------------------
+
+    def create_chat(self, title: str = "New chat") -> int:
+        cur = self._db.execute("INSERT INTO chat (title) VALUES (?)", (title,))
+        self._db.commit()
+        return int(cur.lastrowid)
+
+    def list_chats(self) -> list[dict]:
+        rows = self._db.execute("SELECT id, title FROM chat ORDER BY id DESC").fetchall()
+        return [{"id": i, "title": t} for i, t in rows]
+
+    def title_of(self, chat_id: int) -> str | None:
+        row = self._db.execute("SELECT title FROM chat WHERE id = ?", (chat_id,)).fetchone()
+        return row[0] if row else None
+
+    def rename(self, chat_id: int, title: str) -> None:
+        title = (title or "").strip()[: self._TITLE_MAX] or "New chat"
+        self._db.execute("UPDATE chat SET title = ? WHERE id = ?", (title, chat_id))
+        self._db.commit()
+
+    def delete(self, chat_id: int) -> None:
+        self._db.execute("DELETE FROM message WHERE chat_id = ?", (chat_id,))
+        self._db.execute("DELETE FROM chat WHERE id = ?", (chat_id,))
+        self._db.commit()
+
+    def ensure_chat(self) -> int:
+        """Return the most recent chat id, creating one if there are none."""
+        row = self._db.execute("SELECT id FROM chat ORDER BY id DESC LIMIT 1").fetchone()
+        return int(row[0]) if row else self.create_chat()
+
+    # --- messages ------------------------------------------------------------
+
+    def append(self, chat_id: int, role: str, text: str, media_url: str = "") -> int:
+        cur = self._db.execute(
+            "INSERT INTO message (chat_id, role, text, media_url) VALUES (?, ?, ?, ?)",
+            (chat_id, role, text, media_url),
+        )
+        # Auto-title a fresh chat from its first user message.
+        if role == "user" and self.title_of(chat_id) == "New chat":
+            title = " ".join((text or "").split())[: self._TITLE_MAX].strip()
+            if title:
+                self._db.execute(
+                    "UPDATE chat SET title = ? WHERE id = ?", (title, chat_id)
+                )
+        self._db.commit()
+        return int(cur.lastrowid)
+
+    def since(self, chat_id: int, after_id: int = 0) -> list[dict]:
+        rows = self._db.execute(
+            "SELECT mid, role, text, media_url FROM message "
+            "WHERE chat_id = ? AND mid > ? ORDER BY mid",
+            (chat_id, after_id),
+        ).fetchall()
+        return [{"id": i, "role": r, "text": t, "media_url": m} for i, r, t, m in rows]
+
+    def max_id(self, chat_id: int) -> int:
+        row = self._db.execute(
+            "SELECT COALESCE(MAX(mid), 0) FROM message WHERE chat_id = ?", (chat_id,)
+        ).fetchone()
+        return int(row[0])
+
+    def clear(self, chat_id: int) -> None:
+        self._db.execute("DELETE FROM message WHERE chat_id = ?", (chat_id,))
+        self._db.commit()
+
+    def recent_for_brain(self, chat_id: int, limit: int = 12) -> list[dict]:
+        rows = self._db.execute(
+            "SELECT role, text FROM message WHERE chat_id = ? ORDER BY mid DESC LIMIT ?",
+            (chat_id, limit),
+        ).fetchall()
+        return [{"role": r, "content": t} for r, t in reversed(rows)]
 
 
 class PushStore:

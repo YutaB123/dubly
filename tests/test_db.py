@@ -30,6 +30,20 @@ def test_study_page_clear_removes_pages(tmp_path):
     assert store.get("p1") is None
 
 
+def test_study_page_stores_and_returns_meta(tmp_path):
+    store = StudyPageStore(tmp_path / "s.sqlite")
+    meta = '{"kind": "exam", "course": "STAT 311", "format": "multiple_choice"}'
+    store.save("p1", "Quiz", "<html>x</html>", meta)
+    assert store.get_meta("p1") == meta
+    assert store.get_meta("missing") is None
+
+
+def test_study_page_meta_defaults_to_empty(tmp_path):
+    store = StudyPageStore(tmp_path / "s.sqlite")
+    store.save("p1", "T", "<html>x</html>")  # no meta passed
+    assert store.get_meta("p1") == ""
+
+
 def test_recent_returns_turns_oldest_first(tmp_path):
     store = ConversationStore(tmp_path / "c.sqlite")
     store.save("user", "what's due?")

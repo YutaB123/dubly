@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import base64
 import re
 import threading
 import uuid
@@ -26,6 +27,9 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from app.canvas import is_real_class, short_course_code
+from app.webchat import set_active_chat, reset_active_chat
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -59,6 +63,10 @@ class AppDeps:
     web_chat_secret: str = "" # passcode gating the web chat app
     push: Any = None          # PushService (browser notifications when app is closed)
     vapid_public_key: str = ""# the public key the browser subscribes with
+    cancels: Any = None       # set[str] of cancelled web generation ids (lazily created)
+    canvas: Any = None        # CanvasClient — lets the opening message list real classes
+    study_service: Any = None # StudyService — regenerates a quiz/deck on demand
+    chats: Any = None         # ChatStore — multiple conversations (web app)
 
 
 def _filename_for(content_type: str, index: int = 0) -> str:
@@ -164,9 +172,20 @@ def _keep_typing(deps: AppDeps, message_sid: str, stop: threading.Event) -> None
 
 
 def _process_incoming(
-    deps: AppDeps, body: str, media: list | None = None, message_sid: str = ""
+    deps: AppDeps,
+    body: str,
+    media: list | None = None,
+    message_sid: str = "",
+    attachments: list | None = None,
+    cancel_check=None,
+    history: list | None = None,
+    save_memory: bool = True,
 ) -> None:
-    """The real work, run in the background after we've ack'd Twilio."""
+    """The real work, run in the background after we've ack'd Twilio.
+
+    `history` overrides the brain's memory source (the web app passes the active
+    chat's history). `save_memory=False` skips ConversationStore writes (the web
+    app's per-chat transcript is its own memory)."""
     # Show a 'typing…' animation while we dig, so a slow reply doesn't look dead.
     stop = threading.Event()
     typer = None
@@ -183,10 +202,15 @@ def _process_incoming(
         if _handle_command(deps, body):
             return
 
-        history = deps.conversation.recent()
-        reply = deps.brain.respond(body, history=history)
-        deps.conversation.save("user", body)
-        deps.conversation.save("assistant", reply)
+        if history is None:
+            history = deps.conversation.recent()
+        reply = deps.brain.respond(body, history=history, attachments=attachments)
+        # If the user hit "stop" while we were thinking, drop the reply entirely.
+        if cancel_check is not None and cancel_check():
+            return
+        if save_memory:
+            deps.conversation.save("user", body)
+            deps.conversation.save("assistant", reply)
         deps.sms.send(reply)
     finally:
         stop.set()
@@ -194,8 +218,25 @@ def _process_incoming(
             typer.join(timeout=2)
 
 
+class ChatAttachment(BaseModel):
+    name: str = ""
+    content_type: str = ""
+    data: str = ""  # base64-encoded file bytes
+
+
 class ChatIn(BaseModel):
     text: str = ""
+    attachments: list[ChatAttachment] = []
+    gen_id: str = ""  # client-chosen id so this turn can be cancelled mid-flight
+    chat_id: int | None = None  # which conversation this belongs to
+
+
+class CancelIn(BaseModel):
+    gen_id: str = ""
+
+
+class RenameIn(BaseModel):
+    title: str = ""
 
 
 def _web_authed(deps: AppDeps, key: str) -> bool:
@@ -206,19 +247,55 @@ def _web_authed(deps: AppDeps, key: str) -> bool:
 _CLEAR_CMDS = {"clear", "clear chat", "clear all", "clear everything", "reset"}
 
 GREETING = (
-    "hey 👋 i'm your study assistant. ask me what's due, your grades, the syllabus — "
-    "anything canvas — or i can whip up a study guide or essay for you."
+    "hey 👋 i'm your study assistant. ask me what's due, your grades, the syllabus, "
+    "anything canvas, or i can build you a study guide or an essay blueprint to help you get started."
 )
 
 
-def _ensure_greeting(deps: AppDeps) -> None:
+def _course_label(course) -> str:
+    """A clean "CSE 163: Intermediate Data Programming" from Canvas's messy code+name."""
+    short = short_course_code(course.code or "")
+    # Canvas names are like "CSE 163 A Sp 26: Intermediate Data Programming";
+    # the real title is after the colon (some sites have no title).
+    title = course.name.split(":", 1)[-1].strip() if ":" in course.name else ""
+    if title and short.lower() not in title.lower():
+        return f"{short}: {title}"
+    return short
+
+
+def _greeting_text(deps: AppDeps) -> str:
+    """The opening hello. When Canvas is wired up, list the student's classes."""
+    courses = []
+    if deps.canvas is not None:
+        try:
+            # Only real classes (department + 3-digit number); same rule as everywhere.
+            courses = [c for c in deps.canvas.list_courses() if is_real_class(c.code)]
+        except Exception:
+            courses = []
+    if not courses:
+        return GREETING
+    lines = "\n".join(f"• {_course_label(c)}" for c in courses)
+    return (
+        "hey 👋 here are the classes i see you're enrolled in this quarter:\n"
+        f"{lines}\n\n"
+        "ask me what's due, your grades, the syllabus, anything canvas, "
+        "or i can build you a study guide to help you get started."
+    )
+
+
+def _ensure_greeting(deps: AppDeps, chat_id: int) -> None:
     """Seed a hello so a fresh/empty chat greets you first."""
-    if deps.webchat is not None and deps.webchat.max_id() == 0:
-        deps.webchat.append("assistant", GREETING)
+    if deps.chats is not None and deps.chats.max_id(chat_id) == 0:
+        deps.chats.append(chat_id, "assistant", _greeting_text(deps))
 
 
 def build_app(deps: AppDeps) -> FastAPI:
     app = FastAPI(title="Study Assistant")
+
+    # Tracks web generations the user cancelled (hit "stop") so their late
+    # replies are discarded instead of popping into the transcript.
+    if deps.cancels is None:
+        deps.cancels = set()
 
     if deps.on_started is not None:
         @app.on_event("startup")
@@ -288,6 +365,15 @@ def build_app(deps: AppDeps) -> FastAPI:
         if html is None:
             return HTMLResponse("Not found", status_code=404)
         return HTMLResponse(html)
+
+    @app.post("/study/{page_id}/regenerate")
+    def study_regenerate(page_id: str):
+        """Rebuild a quiz/deck with a fresh set (the page's 'new questions' button)."""
+        if deps.study_service is None:
+            return JSONResponse({"error": "unavailable"}, status_code=503)
+        if not deps.study_service.regenerate(page_id):
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return {"ok": True}
 
     @app.get("/file/{file_id}")
     def serve_file(file_id: str):
@@ -363,40 +449,123 @@ def build_app(deps: AppDeps) -> FastAPI:
             return {"results": [{"error": "no push service"}]}
         return {"results": deps.push.send_sync("Study Assistant", "✅ test notification", force=True)}
 
-    @app.get("/chat/messages")
-    def chat_messages(after: int = 0, x_chat_key: str = Header(default="")):
+    # ---- Conversations (ChatGPT-style: list / new / rename / delete) ---------
+
+    @app.get("/chats")
+    def list_chats(x_chat_key: str = Header(default="")):
         if not _web_authed(deps, x_chat_key):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
+        deps.chats.ensure_chat()  # never present an empty sidebar
+        return {"chats": deps.chats.list_chats()}
+
+    @app.post("/chats")
+    def new_chat(x_chat_key: str = Header(default="")):
+        if not _web_authed(deps, x_chat_key):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        cid = deps.chats.create_chat()
+        _ensure_greeting(deps, cid)  # a brand-new chat greets you right away
+        return {"id": cid, "title": deps.chats.title_of(cid)}
+
+    @app.patch("/chats/{chat_id}")
+    def rename_chat(chat_id: int, payload: RenameIn, x_chat_key: str = Header(default="")):
+        if not _web_authed(deps, x_chat_key):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        if deps.chats.title_of(chat_id) is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        deps.chats.rename(chat_id, payload.title)
+        return {"id": chat_id, "title": deps.chats.title_of(chat_id)}
+
+    @app.delete("/chats/{chat_id}")
+    def delete_chat(chat_id: int, x_chat_key: str = Header(default="")):
+        if not _web_authed(deps, x_chat_key):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        deps.chats.delete(chat_id)
+        return {"ok": True}
+
+    def _resolve_chat(chat_id: int | None) -> int:
+        """For reads: use the given chat, else fall back to the most recent."""
+        if chat_id and deps.chats.title_of(chat_id) is not None:
+            return chat_id
+        return deps.chats.ensure_chat()
+
+    def _resolve_chat_for_write(chat_id: int | None) -> int:
+        """For writes: never hijack another chat. A missing id starts a fresh chat
+        so a stale/bogus id can't inject messages into an unrelated conversation."""
+        if chat_id is None:
+            return deps.chats.ensure_chat()
+        if deps.chats.title_of(chat_id) is not None:
+            return chat_id
+        return deps.chats.create_chat()
+
+    @app.get("/chat/messages")
+    def chat_messages(after: int = 0, chat_id: int | None = None,
+                      x_chat_key: str = Header(default="")):
+        if not _web_authed(deps, x_chat_key):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        cid = _resolve_chat(chat_id)
         if after == 0:
-            _ensure_greeting(deps)  # first open of a fresh chat → say hello
-        return {"messages": deps.webchat.since(after)}
+            _ensure_greeting(deps, cid)  # first open of a fresh chat → say hello
+        return {"chat_id": cid, "messages": deps.chats.since(cid, after)}
 
     @app.post("/chat/send")
     def chat_send(payload: ChatIn, x_chat_key: str = Header(default="")):
         if not _web_authed(deps, x_chat_key):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
+        cid = _resolve_chat_for_write(payload.chat_id)
         text = (payload.text or "").strip()
-        if not text:
-            return {"messages": []}
+        # Decode any uploaded files (base64) into (name, content_type, bytes).
+        files: list = []
+        for a in payload.attachments or []:
+            try:
+                raw = base64.b64decode(a.data or "")
+            except Exception:
+                continue
+            if raw:
+                files.append((a.name or "file", a.content_type or "", raw))
+        if not text and not files:
+            return {"chat_id": cid, "messages": []}
         norm = " ".join(text.lower().split())
-        # Clear wipes EVERYTHING in the chat — the visible transcript and the
-        # brain's memory — leaving a truly empty chat (no leftover bubbles).
-        if norm in _CLEAR_CMDS:
-            deps.webchat.clear()
-            deps.conversation.clear()
+        # "clear" empties THIS chat (and re-greets); uploads are never commands.
+        if text and not files and norm in _CLEAR_CMDS:
+            deps.chats.clear(cid)
             if norm in ("clear all", "clear everything", "reset"):
                 if deps.reminders is not None:
                     deps.reminders.clear_all()
                 if deps.study is not None:
                     deps.study.clear()
-            _ensure_greeting(deps)  # a fresh chat greets you again
-            return {"messages": deps.webchat.since(0), "cleared": True}
-        start = deps.webchat.max_id()
-        deps.webchat.append("user", text)
-        # Reuse the same pipeline as the phone channels; WebClient.send() writes
-        # the brain's reply (and any document links / reminders) into the transcript.
-        _process_incoming(deps, text)
-        return {"messages": deps.webchat.since(start)}
+            _ensure_greeting(deps, cid)
+            return {"chat_id": cid, "messages": deps.chats.since(cid, 0), "cleared": True}
+        # Brain memory = this chat's prior messages (captured before this turn).
+        history = deps.chats.recent_for_brain(cid)
+        start = deps.chats.max_id(cid)
+        bubble = text
+        if files:
+            note = "📎 " + ", ".join(name for name, _, _ in files)
+            bubble = f"{text}\n{note}" if text else note
+        deps.chats.append(cid, "user", bubble)
+        # Route the reply (and any tool-sent files/reminders) into THIS chat.
+        token = set_active_chat(cid)
+        try:
+            gid = (payload.gen_id or "").strip()
+            cancel_check = (lambda: gid in deps.cancels) if gid else None
+            _process_incoming(
+                deps, text, attachments=files or None, cancel_check=cancel_check,
+                history=history, save_memory=False,
+            )
+        finally:
+            reset_active_chat(token)
+            if (payload.gen_id or "").strip():
+                deps.cancels.discard(payload.gen_id.strip())
+        return {"chat_id": cid, "messages": deps.chats.since(cid, start)}
+
+    @app.post("/chat/cancel")
+    def chat_cancel(payload: CancelIn, x_chat_key: str = Header(default="")):
+        if not _web_authed(deps, x_chat_key):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        gid = (payload.gen_id or "").strip()
+        if gid:
+            deps.cancels.add(gid)
+        return {"ok": True}
 
     return app
 
@@ -412,7 +581,7 @@ def create_app() -> FastAPI:
         ConversationStore,
         StudyPageStore,
         FileStore,
-        WebChatStore,
+        ChatStore,
         PushStore,
     )
     from app.reminders import ReminderService
@@ -432,16 +601,16 @@ def create_app() -> FastAPI:
     conversation = ConversationStore(settings.data_dir / "conversation.sqlite")
     study_store = StudyPageStore(settings.data_dir / "study.sqlite")
     file_store = FileStore(settings.data_dir / "files.sqlite")
-    webchat_store = WebChatStore(settings.data_dir / "webchat.sqlite")
+    chat_store = ChatStore(settings.data_dir / "chats.sqlite")
     push_store = PushStore(settings.data_dir / "push.sqlite")
     push_service = PushService(
         push_store, settings.vapid_private_key, settings.vapid_claim_email
     )
 
     # The channel client the brain/documents/reminders push messages through.
-    # "web" routes everything into the web chat transcript; otherwise it's Twilio.
+    # "web" routes everything into the active web chat; otherwise it's Twilio.
     if settings.channel == "web":
-        sms = WebClient(webchat_store, push=push_service)
+        sms = WebClient(chat_store, push=push_service)
     else:
         sms = SmsClient(
             account_sid=settings.twilio_account_sid,
@@ -505,9 +674,11 @@ def create_app() -> FastAPI:
         reminders=reminders,
         onedrive=onedrive,
         files=file_store,
-        webchat=webchat_store,
         web_chat_secret=settings.web_chat_secret,
         push=push_service,
         vapid_public_key=settings.vapid_public_key,
+        canvas=canvas,
+        study_service=study,
+        chats=chat_store,
     )
     return build_app(deps)

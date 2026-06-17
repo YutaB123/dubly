@@ -101,7 +101,13 @@ def load_settings(require_secrets: bool = True) -> Settings:
         # Raw base64url EC private key (what pywebpush expects), single-line.
         vapid_private_key=os.environ.get("VAPID_PRIVATE_KEY", ""),
         vapid_claim_email=os.environ.get("VAPID_CLAIM_EMAIL", "mailto:admin@example.com"),
-        public_base_url=os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/"),
+        # On Render, RENDER_EXTERNAL_URL is set automatically, so a deploy needs no
+        # manual PUBLIC_BASE_URL. Explicit PUBLIC_BASE_URL still wins (local tunnels).
+        public_base_url=(
+            os.environ.get("PUBLIC_BASE_URL")
+            or os.environ.get("RENDER_EXTERNAL_URL")
+            or "http://localhost:8000"
+        ).rstrip("/"),
         onedrive_client_id=os.environ.get(
             "ONEDRIVE_CLIENT_ID", "14d82eec-204b-4c2f-b7e8-296a70dab67e"
         ),
