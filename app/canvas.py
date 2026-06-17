@@ -263,16 +263,36 @@ class CanvasClient:
 
     def list_courses(self) -> list[Course]:
         def _fetch() -> list[Course]:
-            raw = self._get("/courses", {"enrollment_state": "active"})
-            courses: list[Course] = []
+            # Include completed enrollments too: near a quarter's end, current
+            # classes flip from "active" to "completed" in Canvas. We then keep
+            # only THIS term's real classes (drops last quarter + resource sites).
+            raw = self._get(
+                "/courses",
+                {
+                    "enrollment_state[]": ["active", "completed"],
+                    "include[]": "term",
+                    "per_page": 100,
+                },
+            )
+            real: list[tuple[dict, str]] = []
             for c in raw:
                 name = c.get("name")
                 if not name:
                     continue  # restricted/empty stub
-                courses.append(
-                    Course(id=c["id"], name=name, code=c.get("course_code") or name)
-                )
-            return courses
+                code = c.get("course_code") or name
+                if not is_real_class(code):
+                    continue  # resource site / guide / archived — not a class
+                term = c.get("term") or {}
+                real.append((c, term.get("start_at") or ""))
+            if not real:
+                return []
+            # Keep only the most recent term (ISO dates sort correctly; "" sorts low).
+            latest = max(start for _, start in real)
+            keep = [c for c, start in real if start == latest] if latest else [c for c, _ in real]
+            return [
+                Course(id=c["id"], name=c["name"], code=c.get("course_code") or c["name"])
+                for c in keep
+            ]
 
         return self._cached("courses", _fetch)
 
@@ -366,9 +386,11 @@ class CanvasClient:
 
     def _fetch_grades(self) -> list[Grade]:
         codes = {c.id: c.code for c in self.list_courses()}
+        # Active + completed: a just-finished course still has a grade the student
+        # wants. Non-current courses get filtered out by the code map below.
         raw = self._get(
             "/users/self/enrollments",
-            {"type[]": "StudentEnrollment", "state[]": "active"},
+            {"type[]": "StudentEnrollment", "state[]": ["active", "completed"]},
         )
         out: list[Grade] = []
         for e in raw:

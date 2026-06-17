@@ -56,6 +56,28 @@ def test_list_courses_returns_id_name_code():
     assert courses[0].name == "Intermediate Data Programming"
 
 
+def test_list_courses_keeps_only_this_terms_real_classes():
+    # End-of-quarter reality: current classes are 'completed', and the list also
+    # contains last-quarter classes + non-class sites. Keep only THIS term's classes.
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/courses"
+        return httpx.Response(200, json=[
+            {"id": 1, "name": "Calc", "course_code": "MATH 124 A",
+             "term": {"name": "Spring 2026", "start_at": "2026-03-30T00:00:00Z"}},
+            {"id": 2, "name": "Stats", "course_code": "STAT 311 A",
+             "term": {"name": "Spring 2026", "start_at": "2026-03-30T00:00:00Z"}},
+            {"id": 3, "name": "Linguistics", "course_code": "LING 233 A",
+             "term": {"name": "Winter 2026", "start_at": "2026-01-05T00:00:00Z"}},  # past term
+            {"id": 4, "name": "Informatics Resource", "course_code": "Informatics Resource",
+             "term": {"name": "Default Term", "start_at": None}},                   # not a class
+            {"id": 5, "name": "ARCHIVED: ENGL 258", "course_code": "ARCHIVED: ENGL 258 A",
+             "term": {"name": "Autumn 2025", "start_at": "2025-09-01T00:00:00Z"}},  # archived
+        ])
+
+    codes = [c.code for c in make_client(handler).list_courses()]
+    assert codes == ["MATH 124 A", "STAT 311 A"]  # only this term's real classes
+
+
 def test_list_courses_skips_courses_without_a_name():
     # Canvas sometimes returns restricted/empty course stubs.
     def handler(request: httpx.Request) -> httpx.Response:
@@ -244,7 +266,7 @@ def test_get_submission_extracts_uploaded_text_file():
     def handler(request: httpx.Request) -> httpx.Response:
         p = request.url.path
         if p == "/api/v1/courses":
-            return httpx.Response(200, json=[{"id": 5, "name": "X", "course_code": "X"}])
+            return httpx.Response(200, json=[{"id": 5, "name": "Writing", "course_code": "ENGL 131"}])
         if p == "/api/v1/courses/5/assignments":
             return httpx.Response(200, json=[{"id": 9, "name": "Essay", "points_possible": 10}])
         if p.endswith("/submissions/self"):
@@ -258,7 +280,7 @@ def test_get_submission_extracts_uploaded_text_file():
             return httpx.Response(200, content=b"This is my essay text.")
         return httpx.Response(404)
 
-    s = make_client(handler).get_submission("X", "Essay")
+    s = make_client(handler).get_submission("ENGL 131", "Essay")
     assert "my essay text" in s.text
     assert s.attachments == ["essay.txt"]
 
