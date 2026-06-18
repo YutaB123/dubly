@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dubs · pick a UI</title>
+<style>
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:#0c0c12; color:#eee; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; padding:18px 14px 60px; }
+  h1 { font-size:20px; margin:4px 6px 2px; }
+  .hint { color:#9a9aa8; font-size:13px; margin:0 6px 18px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:22px; }
+  .card { display:flex; flex-direction:column; gap:8px; }
+  .label { font-size:14px; font-weight:600; }
+  .label b { color:#b7a57a; }
+  .label small { display:block; font-weight:400; color:#9a9aa8; font-size:12px; margin-top:1px; }
+  /* phone mockup */
+  .phone { border-radius:26px; overflow:hidden; height:430px; display:flex; flex-direction:column;
+    box-shadow:0 14px 40px rgba(0,0,0,.5); border:1px solid #23232e; }
+  .hdr { display:flex; align-items:center; gap:8px; padding:12px 12px; font-weight:600; font-size:15px; }
+  .hdr .av { width:30px; height:30px; border-radius:50%; flex:0 0 auto; overflow:hidden; background:#fff; }
+  .hdr .av svg { width:100%; height:100%; display:block; }
+  .hdr small { display:block; font-weight:400; font-size:11px; opacity:.7; }
+  .msgs { flex:1; overflow:hidden; padding:12px 10px; display:flex; flex-direction:column; gap:8px; }
+  .brow { display:flex; align-items:flex-end; gap:6px; }
+  .brow .av { width:24px; height:24px; border-radius:50%; flex:0 0 auto; overflow:hidden; background:#fff; }
+  .brow .av svg { width:100%; height:100%; display:block; }
+  .urow { display:flex; justify-content:flex-end; }
+  .bbl { max-width:80%; padding:8px 11px; border-radius:16px; font-size:13px; line-height:1.35; white-space:pre-wrap; }
+  .bot { border-bottom-left-radius:5px; }
+  .usr { border-bottom-right-radius:5px; }
+  .card-q { margin-top:6px; padding:8px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+  .inp { display:flex; align-items:center; gap:8px; padding:9px 11px; margin:0 8px 10px; border-radius:20px; font-size:12px; }
+  .inp .send { margin-left:auto; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; flex:0 0 auto; }
+</style>
+</head>
+<body>
+<h1>🐾 Pick a look for Dubs</h1>
+<p class="hint">10 directions below. Tell me the number you like (or mix: "3's colors, 6's bubbles") and I'll build it for real.</p>
+<div class="grid" id="grid"></div>
+
+<script>
+// Dubs husky avatar (inline SVG, theme-independent)
+const DUBS = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+<circle cx="32" cy="32" r="32" fill="#ffffff"/>
+<path d="M18 11 L13 30 L26 24 Z" fill="#4a4a55"/><path d="M46 11 L51 30 L38 24 Z" fill="#4a4a55"/>
+<path d="M19 16 L16 28 L25 24 Z" fill="#e7e1f0"/><path d="M45 16 L48 28 L39 24 Z" fill="#e7e1f0"/>
+<path d="M32 17 C20 17 16 29 16 38 C16 50 24 55 32 55 C40 55 48 50 48 38 C48 29 44 17 32 17 Z" fill="#f4f1f8"/>
+<path d="M32 19 C24 19 19 27 18 37 C24 32 28 34 32 37 C36 34 40 32 46 37 C45 27 40 19 32 19 Z" fill="#6b6478"/>
+<ellipse cx="25" cy="36" rx="3.4" ry="3.9" fill="#3aa0ff"/><ellipse cx="39" cy="36" rx="3.4" ry="3.9" fill="#3aa0ff"/>
+<circle cx="25" cy="36" r="1.3" fill="#10243a"/><circle cx="39" cy="36" r="1.3" fill="#10243a"/>
+<ellipse cx="32" cy="46" rx="8" ry="6.5" fill="#ffffff"/>
+<ellipse cx="32" cy="43" rx="3" ry="2.3" fill="#1b1b1b"/>
+<path d="M32 45 Q32 49 28 50 M32 45 Q32 49 36 50" stroke="#1b1b1b" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+</svg>`;
+
+const THEMES = [
+  {n:"Husky Night", s:"deep purple + gold (UW dark)", bg:"#1a1033", hdr:"linear-gradient(180deg,#3a2370,#241544)", hdrtx:"#efeaf6",
+   usr:"linear-gradient(135deg,#5e3a9e,#4b2e83)", usrtx:"#fff", bot:"#2c1d4e", bottx:"#efeaf6", card:"linear-gradient(135deg,#4b2e83,#b7a57a)", cardtx:"#fff", inp:"#241544", inptx:"#a99fc7", send:"linear-gradient(135deg,#4b2e83,#b7a57a)", sendtx:"#fff"},
+  {n:"Husky Daylight", s:"clean white + purple (UW light)", bg:"#f5f2fa", hdr:"#4b2e83", hdrtx:"#fff",
+   usr:"#4b2e83", usrtx:"#fff", bot:"#ece4f6", bottx:"#2a2140", card:"#4b2e83", cardtx:"#fff", inp:"#fff", inptx:"#8a7fa5", send:"#4b2e83", sendtx:"#fff"},
+  {n:"Gold & Charcoal", s:"black + husky gold, sleek", bg:"#141414", hdr:"#1d1d1d", hdrtx:"#e8d9a8",
+   usr:"#b7a57a", usrtx:"#1a1a1a", bot:"#262626", bottx:"#eee", card:"#b7a57a", cardtx:"#1a1a1a", inp:"#1d1d1d", inptx:"#999", send:"#b7a57a", sendtx:"#1a1a1a"},
+  {n:"Classic Blue", s:"familiar iMessage style", bg:"#ffffff", hdr:"#f7f7f8", hdrtx:"#111",
+   usr:"#0a84ff", usrtx:"#fff", bot:"#e9e9eb", bottx:"#111", card:"#0a84ff", cardtx:"#fff", inp:"#f0f0f2", inptx:"#888", send:"#0a84ff", sendtx:"#fff"},
+  {n:"Mono Minimal", s:"black & white, ultra-clean", bg:"#ffffff", hdr:"#ffffff", hdrtx:"#111",
+   usr:"#111111", usrtx:"#fff", bot:"#f1f1f1", bottx:"#111", card:"#111", cardtx:"#fff", inp:"#f4f4f4", inptx:"#999", send:"#111", sendtx:"#fff"},
+  {n:"Lavender Cloud", s:"soft, airy, friendly", bg:"#efe9fb", hdr:"#b8a7e6", hdrtx:"#fff",
+   usr:"#8b6fd4", usrtx:"#fff", bot:"#ffffff", bottx:"#3a2f55", card:"#8b6fd4", cardtx:"#fff", inp:"#ffffff", inptx:"#9a8fb5", send:"#8b6fd4", sendtx:"#fff"},
+  {n:"Midnight Indigo", s:"dark, modern, single accent", bg:"#0e1230", hdr:"#161b45", hdrtx:"#dfe3ff",
+   usr:"#4f5bd5", usrtx:"#fff", bot:"#1b2050", bottx:"#dfe3ff", card:"linear-gradient(135deg,#4f5bd5,#7c8cff)", cardtx:"#fff", inp:"#161b45", inptx:"#8b91c0", send:"#5b6bff", sendtx:"#fff"},
+  {n:"Notion Calm", s:"warm off-white, document-like", bg:"#f7f6f3", hdr:"#ffffff", hdrtx:"#37352f",
+   usr:"#37352f", usrtx:"#fff", bot:"#eceae6", bottx:"#37352f", card:"#9b8d7a", cardtx:"#fff", inp:"#ffffff", inptx:"#9b958a", send:"#37352f", sendtx:"#fff", font:'Georgia, "Times New Roman", serif'},
+  {n:"Sunset Warm", s:"cream + orange/pink gradient", bg:"#fff7f0", hdr:"linear-gradient(135deg,#ff8a5c,#ff5c8a)", hdrtx:"#fff",
+   usr:"linear-gradient(135deg,#ff7a59,#ff5c8a)", usrtx:"#fff", bot:"#ffe9df", bottx:"#5a2a2a", card:"linear-gradient(135deg,#ff7a59,#ff5c8a)", cardtx:"#fff", inp:"#fff", inptx:"#b88", send:"#ff6b6b", sendtx:"#fff"},
+  {n:"Terminal Dawg", s:"dark, monospace, hacker green", bg:"#0b0f0b", hdr:"#0f160f", hdrtx:"#7CFC7C",
+   usr:"#1f3a1f", usrtx:"#d6ffd6", bot:"#11180f", bottx:"#9dffa0", card:"#1f3a1f", cardtx:"#9dffa0", inp:"#0f160f", inptx:"#5a7a5a", send:"#1f3a1f", sendtx:"#7CFC7C", font:'"SF Mono",Consolas,Menlo,monospace'},
+];
+
+function mock(t, i) {
+  const font = t.font || 'inherit';
+  return `<div class="card">
+    <div class="phone" style="background:${t.bg};font-family:${font}">
+      <div class="hdr" style="background:${t.hdr};color:${t.hdrtx}">
+        <div class="av">${DUBS}</div><div>Dubs<small>your husky study buddy</small></div>
+      </div>
+      <div class="msgs">
+        <div class="brow"><div class="av">${DUBS}</div>
+          <div class="bbl bot" style="background:${t.bot};color:${t.bottx}">hey Dawg 🐾 you've got CSE 163, MATH 124, PHIL 149 and STAT 311 this quarter.</div></div>
+        <div class="urow"><div class="bbl usr" style="background:${t.usr};color:${t.usrtx}">make me a quiz for STAT 311</div></div>
+        <div class="brow"><div class="av">${DUBS}</div>
+          <div class="bbl bot" style="background:${t.bot};color:${t.bottx}">here you go:
+            <div class="card-q" style="background:${t.card};color:${t.cardtx}">📝 Quiz · tap to study →</div></div></div>
+      </div>
+      <div class="inp" style="background:${t.inp};color:${t.inptx}">Message Dubs…
+        <div class="send" style="background:${t.send};color:${t.sendtx}">↑</div></div>
+    </div>
+    <div class="label"><b>${i+1}</b> · ${t.n}<small>${t.s}</small></div>
+  </div>`;
+}
+document.getElementById('grid').innerHTML = THEMES.map(mock).join('');
+</script>
+</body>
+</html>
