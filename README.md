@@ -1,28 +1,50 @@
-# Study Assistant
+# 🐺 Dubly
 
-Text it from your phone like a friend. It's wired to your UW Canvas account, so
-it answers from your real classes, assignments, and due dates — and it can set
-reminders (delivered as texts) and turn assignments/readings into flashcards or
-practice exams (delivered as a web-page link).
+**Your husky study buddy — wired to your UW Canvas. Go Dawgs.**
 
-See `plan.md` for the plain-English overview of what it does.
+Dubly is a chat app connected to your real University of Washington Canvas
+account, so it answers from your actual classes, assignments, grades, and due
+dates. Ask it anything about your courses and it can also **generate quizzes,
+flashcards, study plans, and Word documents** on the spot — then you study right
+inside the chat.
+
+Powered by Anthropic's Claude. Talk to it through the **web app** (a husky-themed
+PWA) or, optionally, over **SMS**.
+
+## What it does
+
+- **Knows your quarter** — on open, it lists the classes you're actually enrolled in.
+- **Answers from Canvas** — "what's due this week?", "what's my grade in stats?",
+  "what's on my philosophy syllabus?" — all from your real data.
+- **Makes quizzes** — generates a multiple-choice quiz for any class, with instant
+  answer checking and explanations.
+- **Makes flashcards** — turns a topic or reading into a study deck you flip through.
+- **Drafts documents** — builds a Word doc (e.g. "things to know for my CSE 163
+  presentation") you can download.
+- **Reminders & push** — schedules reminders and can send web-push notifications.
 
 ## What's inside
 
 ```
 app/
-  config.py     settings loaded from .env
-  canvas.py     talks to UW Canvas (courses, assignments, due dates, details)
-  timefmt.py    casual due-date phrasing in Pacific time
-  tools.py      the tools Claude can call + how Canvas data is formatted
-  brain.py      Claude's casual-friend personality + the tool loop
-  reminders.py  schedule texts for later (survives restarts)
-  study.py      make flashcards / practice exams as a web page
-  sms.py        send/receive texts through Twilio (only your number allowed)
-  db.py         small local memory (recent chat + generated study pages)
-  main.py       the web app: /sms webhook, /study/{id}, /health
-tests/          the test suite
+  main.py        FastAPI app — serves /chat (web UI), /sms webhook, /study pages, push, health
+  webchat.py     the web chat backend (the husky PWA)
+  brain.py       Claude's personality + the tool-calling loop
+  canvas.py      UW Canvas API — courses, assignments, grades, due dates, syllabus
+  tools.py       the tools Claude can call + how Canvas data is formatted
+  study.py       quizzes / flashcards / study pages
+  documents.py   generates downloadable Word documents
+  reminders.py   schedule reminders (survives restarts)
+  push.py        web-push notifications
+  onedrive.py    OneDrive integration for saved files
+  sms.py         optional SMS channel via Twilio
+  db.py          small local store (chat memory + generated study material)
+  config.py      settings loaded from .env
+  static/        chat.html, the husky avatar, PWA manifest + service worker, icons
+tests/           the test suite
 ```
+
+The bare domain redirects to **`/chat`**, where the app lives.
 
 ## Setup
 
@@ -31,12 +53,13 @@ tests/          the test suite
    python -m venv .venv
    .venv\Scripts\pip install -r requirements.txt
    ```
-2. **Configure**: copy `.env.example` to `.env` and fill in your values:
+2. **Configure** — copy `.env.example` to `.env` and fill in:
    - `ANTHROPIC_API_KEY` — from console.anthropic.com
    - `CANVAS_TOKEN` — UW Canvas → Account → Settings → New Access Token
-   - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` — your Twilio number
-   - `MY_PHONE_NUMBER` — your phone (the only number allowed to use it)
-   - `PUBLIC_BASE_URL` — your public URL (tunnel for local, host URL when deployed)
+   - `PUBLIC_BASE_URL` — your public URL (a tunnel locally, the host URL when deployed)
+   - *Optional (SMS):* `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `MY_PHONE_NUMBER`
+
+   Keys live only in `.env`, which is git-ignored — nothing secret is committed.
 
 ## Run it locally
 
@@ -44,15 +67,12 @@ tests/          the test suite
 .venv\Scripts\uvicorn app.main:create_app --factory --reload
 ```
 
-Then expose it to Twilio with a tunnel (so texts can reach your machine):
+Open **http://localhost:8000/** — it redirects to the chat. For push
+notifications or SMS testing, expose it with a tunnel (`ngrok http 8000`) and set
+`PUBLIC_BASE_URL` to the HTTPS tunnel URL.
 
-```
-ngrok http 8000
-```
-
-Put the tunnel URL into `PUBLIC_BASE_URL` in `.env`, and set your Twilio number's
-**Messaging webhook** to `https://<your-tunnel>/sms`. Text the number "what's due
-this week?" and you should get a reply.
+*(SMS, optional)* point your Twilio number's **Messaging webhook** at
+`https://<your-tunnel>/sms`, then text it "what's due this week?".
 
 ## Run the tests
 
@@ -62,17 +82,17 @@ this week?" and you should get a reply.
 
 ## Deploy (always-on)
 
-Push to a cloud host (Railway / Render / Fly.io). The `Procfile` already has the
-start command. After deploying:
+Push to a cloud host (Render / Railway / Fly.io). The `Procfile` has the start
+command. After deploying:
 
 - Set the same environment variables in the host's dashboard.
 - Set `PUBLIC_BASE_URL` to the host's URL.
-- Point your Twilio number's Messaging webhook at `https://<host>/sms`.
+- *(If using SMS)* point the Twilio Messaging webhook at `https://<host>/sms`.
 
 Two notes:
 
-- **Run a single instance.** Reminders are scheduled in-process; multiple copies
-  would double-fire them.
-- **US SMS registration.** Texting real recipients from a US number needs a
-  one-time A2P 10DLC registration in Twilio. A trial number works right away for
-  texting your own verified phone while building.
+- **Run a single instance** — reminders are scheduled in-process, so multiple
+  copies would double-fire them.
+- **US SMS registration** — texting from a US number needs a one-time A2P 10DLC
+  registration in Twilio (a trial number works right away for your own verified
+  phone). Not needed if you only use the web chat.
