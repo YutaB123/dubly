@@ -1,6 +1,6 @@
 // Service worker: caches the app shell, and shows push notifications so the
 // assistant can reach you even when the app is closed.
-const CACHE = 'dubly-v19';
+const CACHE = 'dubly-v20';
 const SHELL = ['/chat', '/manifest.webmanifest', '/static/icon-192.png', '/static/dubs.png'];
 
 self.addEventListener('install', e => {
