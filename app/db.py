@@ -259,6 +259,34 @@ class ChatStore:
         return [{"role": r, "content": t} for r, t in reversed(rows)]
 
 
+class AlertStore:
+    """Remembers what we've already alerted on, so proactive pushes don't repeat."""
+
+    def __init__(self, path: str | Path):
+        self.path = str(path)
+        self._db = sqlite3.connect(self.path, check_same_thread=False)
+        self._db.execute("CREATE TABLE IF NOT EXISTS grade_seen (course TEXT PRIMARY KEY, score REAL)")
+        self._db.execute("CREATE TABLE IF NOT EXISTS due_alerted (ref TEXT PRIMARY KEY)")
+        self._db.commit()
+
+    def grade_for(self, course: str):
+        row = self._db.execute("SELECT score FROM grade_seen WHERE course = ?", (course,)).fetchone()
+        return row[0] if row else None
+
+    def set_grade(self, course: str, score: float) -> None:
+        self._db.execute(
+            "INSERT OR REPLACE INTO grade_seen (course, score) VALUES (?, ?)", (course, score)
+        )
+        self._db.commit()
+
+    def was_due_alerted(self, ref: str) -> bool:
+        return self._db.execute("SELECT 1 FROM due_alerted WHERE ref = ?", (ref,)).fetchone() is not None
+
+    def mark_due_alerted(self, ref: str) -> None:
+        self._db.execute("INSERT OR IGNORE INTO due_alerted (ref) VALUES (?)", (ref,))
+        self._db.commit()
+
+
 class PushStore:
     """Browser push subscriptions, so the app can notify you when it's closed."""
 

@@ -597,7 +597,9 @@ def create_app() -> FastAPI:
         FileStore,
         ChatStore,
         PushStore,
+        AlertStore,
     )
+    from app.alerts import AlertService
     from app.reminders import ReminderService
     from app.study import StudyService
     from app.onedrive import OneDriveClient
@@ -653,6 +655,17 @@ def create_app() -> FastAPI:
     )
     reminders = ReminderService(scheduler=scheduler, sms=sms)
 
+    # Proactive alerts: poll Canvas for new grades / due-soon items and push them.
+    alerts = AlertService(
+        canvas=canvas,
+        push=push_service,
+        store=AlertStore(settings.data_dir / "alerts.sqlite"),
+    )
+
+    def _on_started():
+        scheduler.start()
+        alerts.start()
+
     anthropic_client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     study = StudyService(
         canvas=canvas,
@@ -684,7 +697,7 @@ def create_app() -> FastAPI:
         validate=sms.validate_signature,
         public_sms_url=f"{settings.public_base_url}/sms",
         public_base_url=settings.public_base_url,
-        on_started=scheduler.start,
+        on_started=_on_started,
         reminders=reminders,
         onedrive=onedrive,
         files=file_store,

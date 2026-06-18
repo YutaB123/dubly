@@ -2,7 +2,7 @@ services:
   - type: web
     name: canvas-study-assistant
     runtime: python
-    plan: free            # bump to "starter" for always-on (no cold starts; reminders fire reliably)
+    plan: starter         # always-on: no cold starts; the alert poller + reminders run 24/7
     branch: main
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:create_app --factory --host 0.0.0.0 --port $PORT
