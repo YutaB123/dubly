@@ -654,7 +654,11 @@ def create_app() -> FastAPI:
 
     settings = load_settings(require_secrets=True)
 
-    canvas = CanvasClient(settings.canvas_base_url, settings.canvas_token)
+    if settings.demo_mode:
+        from app.demo_canvas import DemoCanvasClient
+        canvas = DemoCanvasClient(settings.canvas_base_url)
+    else:
+        canvas = CanvasClient(settings.canvas_base_url, settings.canvas_token)
     conversation = ConversationStore(settings.data_dir / "conversation.sqlite")
     study_store = StudyPageStore(settings.data_dir / "study.sqlite")
     file_store = FileStore(settings.data_dir / "files.sqlite")

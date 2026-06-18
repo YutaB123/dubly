@@ -58,6 +58,10 @@ class Settings:
     # Where local data files live
     data_dir: Path
 
+    # Demo mode: serve a fake sample student instead of a real Canvas account
+    # (for a public "try it live" link). When on, CANVAS_TOKEN isn't required.
+    demo_mode: bool = False
+
 
 def _get(name: str, default: str | None = None) -> str:
     value = os.environ.get(name, default)
@@ -82,6 +86,8 @@ def load_settings(require_secrets: bool = True) -> Settings:
     data_dir = Path(os.environ.get("DATA_DIR", "./data")).expanduser()
     data_dir.mkdir(parents=True, exist_ok=True)
 
+    demo_mode = os.environ.get("DEMO_MODE", "").strip().lower() in ("1", "true", "yes", "on")
+
     return Settings(
         anthropic_api_key=secret("ANTHROPIC_API_KEY"),
         anthropic_model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
@@ -89,7 +95,8 @@ def load_settings(require_secrets: bool = True) -> Settings:
         canvas_base_url=os.environ.get(
             "CANVAS_BASE_URL", "https://canvas.uw.edu/api/v1"
         ).rstrip("/"),
-        canvas_token=secret("CANVAS_TOKEN"),
+        # In demo mode there's no real account, so the token isn't required.
+        canvas_token=(os.environ.get("CANVAS_TOKEN", "") if demo_mode else secret("CANVAS_TOKEN")),
         # Twilio is only used in sms/whatsapp mode; optional so a web-only deploy
         # doesn't need it (its absence used to crash startup on Render).
         twilio_account_sid=os.environ.get("TWILIO_ACCOUNT_SID", ""),
@@ -117,4 +124,5 @@ def load_settings(require_secrets: bool = True) -> Settings:
         onedrive_refresh_token=os.environ.get("ONEDRIVE_REFRESH_TOKEN", ""),
         onedrive_folder=os.environ.get("ONEDRIVE_FOLDER", "Documents/whatsapp"),
         data_dir=data_dir,
+        demo_mode=demo_mode,
     )

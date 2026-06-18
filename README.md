@@ -61,6 +61,14 @@ The bare domain redirects to **`/chat`**, where the app lives.
 
    Keys live only in `.env`, which is git-ignored — nothing secret is committed.
 
+## Demo mode
+
+Set **`DEMO_MODE=true`** to serve a fake sample student — believable UW classes,
+grades, due dates, and syllabi — instead of a real Canvas account. Quizzes,
+flashcards, and documents still generate for real. This is what powers the public
+"try it live" link, so no one's actual Canvas data is exposed. In demo mode
+`CANVAS_TOKEN` isn't needed (only `ANTHROPIC_API_KEY`).
+
 ## Run it locally
 
 ```
