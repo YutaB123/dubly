@@ -5,11 +5,14 @@ from __future__ import annotations
 import io
 import zipfile
 
-from app.documents import DocumentService, render_docx, render_pdf, render_pptx
+from app.documents import (
+    DocumentService, render_docx, render_pdf, render_pptx, render_xlsx, render_csv,
+)
 from app.db import FileStore
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 class FakeSms:
@@ -120,6 +123,34 @@ def test_make_document_powerpoint_format(tmp_path):
     assert filename == "Deck.pptx"
     assert ctype == PPTX_MIME
     assert data[:2] == b"PK"
+
+
+def test_render_csv_is_the_raw_content_bytes():
+    assert render_csv("Grades", "name,grade\nDubs,A") == b"name,grade\nDubs,A"
+
+
+def test_render_xlsx_is_a_valid_workbook_with_the_data():
+    import io, zipfile
+    data = render_xlsx("Grades", "name,grade\nDubs,95")
+    assert data[:2] == b"PK"
+    z = zipfile.ZipFile(io.BytesIO(data))
+    assert "xl/workbook.xml" in z.namelist()
+    blob = b"".join(z.read(n) for n in z.namelist() if n.endswith(".xml"))
+    assert b"name" in blob and b"Dubs" in blob
+
+
+def test_make_document_excel_format(tmp_path):
+    svc, sms, files = _doc_svc(tmp_path)
+    svc.dispatch("make_document", {"title": "Data", "content": "a,b\n1,2", "format": "excel"})
+    filename, ctype, data = _stored(sms, files)
+    assert filename == "Data.xlsx" and ctype == XLSX_MIME and data[:2] == b"PK"
+
+
+def test_make_document_csv_format(tmp_path):
+    svc, sms, files = _doc_svc(tmp_path)
+    svc.dispatch("make_document", {"title": "Rows", "content": "a,b\n1,2", "format": "csv"})
+    filename, ctype, data = _stored(sms, files)
+    assert filename == "Rows.csv" and ctype == "text/csv" and data == b"a,b\n1,2"
 
 
 def test_make_document_defaults_to_word(tmp_path):

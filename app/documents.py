@@ -22,11 +22,12 @@ DOCUMENT_TOOLS = [
         "name": "make_document",
         "description": "Create a downloadable file from text and SEND it to the student. Use "
         "whenever they ask you to write something up as a file they can download — a study guide, "
-        "summary, notes, outline, cheat sheet, essay blueprint, slides, etc. You write the full "
-        "content yourself in 'content'. Pick 'format': 'word' (.docx, default), 'pdf', or "
-        "'powerpoint' (.pptx slides) — match what they ask for ('make a PDF', 'make a powerpoint'). "
-        "For powerpoint, write the content as sections separated by a blank line, each starting "
-        "with a short heading line followed by bullet lines (one slide per section).",
+        "summary, notes, outline, cheat sheet, essay blueprint, slides, table of data, etc. You "
+        "write the full content yourself in 'content'. Pick 'format' to match what they ask for: "
+        "'word' (.docx, default), 'pdf', 'powerpoint' (.pptx slides), 'excel' (.xlsx spreadsheet), "
+        "or 'csv'. For powerpoint, write content as blank-line-separated sections, each a short "
+        "heading line then bullet lines (one slide per section). For excel/csv, write content as "
+        "comma-separated rows, one per line, first row as column headers.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -40,7 +41,7 @@ DOCUMENT_TOOLS = [
                 },
                 "format": {
                     "type": "string",
-                    "enum": ["word", "pdf", "powerpoint"],
+                    "enum": ["word", "pdf", "powerpoint", "excel", "csv"],
                     "description": "File type to produce. Default 'word'.",
                 },
             },
@@ -166,6 +167,41 @@ def render_pptx(title: str, content: str) -> bytes:
     return buf.getvalue()
 
 
+# --- CSV + Excel (.xlsx) -----------------------------------------------------
+
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def render_csv(title: str, content: str) -> bytes:
+    """A CSV file — the content is already comma-separated rows, just encode it."""
+    return (content or "").encode("utf-8")
+
+
+def render_xlsx(title: str, content: str) -> bytes:
+    """An Excel workbook from comma-separated rows; row 1 is treated as bold headers,
+    and numeric cells are written as numbers."""
+    import csv as _csv
+    import xlsxwriter
+
+    buf = io.BytesIO()
+    wb = xlsxwriter.Workbook(buf, {"in_memory": True})
+    sheet_name = re.sub(r"[\[\]:*?/\\]", "", title)[:31] or "Sheet1"
+    ws = wb.add_worksheet(sheet_name)
+    bold = wb.add_format({"bold": True})
+    rows = list(_csv.reader(io.StringIO(content or "")))
+    for r, row in enumerate(rows):
+        for c, val in enumerate(row):
+            if r == 0:
+                ws.write(r, c, val, bold)
+            else:
+                try:
+                    ws.write_number(r, c, float(val))
+                except (ValueError, TypeError):
+                    ws.write(r, c, val)
+    wb.close()
+    return buf.getvalue()
+
+
 # extension + MIME for each format the document tool can produce.
 _FORMATS = {
     "pdf": (".pdf", "application/pdf"),
@@ -173,6 +209,11 @@ _FORMATS = {
     "pptx": (".pptx", PPTX_MIME),
     "slides": (".pptx", PPTX_MIME),
     "presentation": (".pptx", PPTX_MIME),
+    "excel": (".xlsx", XLSX_MIME),
+    "xlsx": (".xlsx", XLSX_MIME),
+    "spreadsheet": (".xlsx", XLSX_MIME),
+    "sheet": (".xlsx", XLSX_MIME),
+    "csv": (".csv", "text/csv"),
     "word": (".docx", DOCX_MIME),
     "docx": (".docx", DOCX_MIME),
 }
@@ -206,6 +247,10 @@ class DocumentService:
             data = render_pdf(title, content)
         elif ext == ".pptx":
             data = render_pptx(title, content)
+        elif ext == ".xlsx":
+            data = render_xlsx(title, content)
+        elif ext == ".csv":
+            data = render_csv(title, content)
         else:
             data = render_docx(title, content)
         filename = _safe_name(title) + ext
