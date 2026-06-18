@@ -278,8 +278,8 @@ async function api(path, opts={}){
   if (r.status === 401){ lockOut(); throw new Error('unauthorized'); }
   return r;
 }
-function lockOut(){ localStorage.removeItem('chatKey'); KEY=''; gate.classList.remove('hidden');
-  document.getElementById('gateErr').textContent = 'Wrong passcode — try again.'; }
+function lockOut(){ const hadKey = !!KEY; localStorage.removeItem('chatKey'); KEY=''; gate.classList.remove('hidden');
+  document.getElementById('gateErr').textContent = hadKey ? 'Wrong passcode — try again.' : ''; }
 
 function chatParam(){ return currentChat ? ('&chat_id=' + currentChat) : ''; }
 async function loadHistory(){
@@ -567,7 +567,9 @@ document.addEventListener('visibilitychange', async ()=>{
     _hiddenAt = 0; try { await freshOpenChat(); log.innerHTML=''; lastId=0; await loadHistory(); } catch(e){}
   }
 });
-if (KEY){ start(); } else { gate.classList.remove('hidden'); }
+// Always try to start: in demo mode the server is open (no passcode) so it just
+// loads; in passcode mode the first request 401s and start() shows the gate.
+start();
 </script>
 </body>
 </html>

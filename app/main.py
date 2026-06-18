@@ -62,6 +62,7 @@ class AppDeps:
     files: Any = None         # FileStore (serves outbound files to Twilio)
     webchat: Any = None       # WebChatStore (the web app's visible transcript)
     web_chat_secret: str = "" # passcode gating the web chat app
+    demo_mode: bool = False   # public demo: open the chat, serve fake sample data
     push: Any = None          # PushService (browser notifications when app is closed)
     vapid_public_key: str = ""# the public key the browser subscribes with
     cancels: Any = None       # set[str] of cancelled web generation ids (lazily created)
@@ -242,7 +243,11 @@ class RenameIn(BaseModel):
 
 
 def _web_authed(deps: AppDeps, key: str) -> bool:
-    """The web chat is gated by a shared passcode (not a phone whitelist)."""
+    """The web chat is gated by a shared passcode (not a phone whitelist).
+
+    In demo mode there's no real data to protect, so the chat is open to anyone."""
+    if deps.demo_mode:
+        return True
     return bool(deps.web_chat_secret) and key == deps.web_chat_secret
 
 
@@ -760,6 +765,7 @@ def create_app() -> FastAPI:
         onedrive=onedrive,
         files=file_store,
         web_chat_secret=settings.web_chat_secret,
+        demo_mode=settings.demo_mode,
         push=push_service,
         vapid_public_key=settings.vapid_public_key,
         canvas=canvas,
