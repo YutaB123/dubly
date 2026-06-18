@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pick a Dubs</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;background:#efe9fb;color:#3a2f55;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:18px 14px 60px;}
+  h1{font-size:20px;margin:4px 6px 2px;}
+  .hint{color:#8a7fa5;font-size:13px;margin:0 6px 18px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:18px;}
+  .card{background:#fff;border:1px solid #e0d6f2;border-radius:18px;padding:14px 10px 10px;text-align:center;
+    box-shadow:0 6px 18px rgba(120,95,180,.12);}
+  .big{width:88px;height:88px;border-radius:50%;margin:0 auto 8px;overflow:hidden;box-shadow:0 3px 10px rgba(120,95,180,.25);}
+  .big svg{width:100%;height:100%;display:block;}
+  .mini{display:flex;align-items:flex-end;gap:6px;justify-content:center;margin:8px 0 6px;}
+  .mini .av{width:26px;height:26px;border-radius:50%;overflow:hidden;flex:0 0 auto;}
+  .mini .av svg{width:100%;height:100%;display:block;}
+  .mini .bbl{background:#fff;border:1px solid #e6ddf5;color:#3a2f55;border-radius:14px;border-bottom-left-radius:4px;
+    padding:6px 9px;font-size:11px;box-shadow:0 1px 3px rgba(90,70,130,.12);}
+  .label{font-size:13px;font-weight:600;}
+  .label b{color:#8b6fd4;}
+  .label small{display:block;font-weight:400;color:#8a7fa5;font-size:11px;}
+</style>
+</head>
+<body>
+<h1>🐾 Pick your Dubs</h1>
+<p class="hint">10 husky avatars. Tell me the number and I'll make it Dubs' profile pic in the app.</p>
+<div class="grid" id="grid"></div>
+<script>
+function face(o){o=o||{};
+  const bg=o.bg||'#ffffff';
+  const eyes=o.eyes==='happy'
+    ? `<path d="M21 36 Q25 31 29 36" stroke="#10243a" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M35 36 Q39 31 43 36" stroke="#10243a" stroke-width="2" fill="none" stroke-linecap="round"/>`
+    : `<ellipse cx="25" cy="36" rx="3.4" ry="3.9" fill="#3aa0ff"/><ellipse cx="39" cy="36" rx="3.4" ry="3.9" fill="#3aa0ff"/><circle cx="25" cy="36" r="1.3" fill="#10243a"/><circle cx="39" cy="36" r="1.3" fill="#10243a"/>`;
+  const tongue=o.tongue?`<path d="M28 49 q4 7 8 0 z" fill="#ff7a9c"/>`:'';
+  const band=o.band?`<path d="M19 49 L45 49 L32 61 Z" fill="#8b6fd4"/><path d="M19 49 L45 49 L43 52 L21 52 Z" fill="#6f4fc0"/>`:'';
+  return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="32" cy="32" r="32" fill="${bg}"/>
+  <path d="M18 11 L13 30 L26 24 Z" fill="#4a4a55"/><path d="M46 11 L51 30 L38 24 Z" fill="#4a4a55"/>
+  <path d="M19 16 L16 28 L25 24 Z" fill="#e7e1f0"/><path d="M45 16 L48 28 L39 24 Z" fill="#e7e1f0"/>
+  <path d="M32 17 C20 17 16 29 16 38 C16 50 24 55 32 55 C40 55 48 50 48 38 C48 29 44 17 32 17 Z" fill="#f4f1f8"/>
+  <path d="M32 19 C24 19 19 27 18 37 C24 32 28 34 32 37 C36 34 40 32 46 37 C45 27 40 19 32 19 Z" fill="${o.mask||'#6b6478'}"/>
+  ${eyes}
+  <ellipse cx="32" cy="46" rx="8" ry="6.5" fill="#fff"/>
+  ${tongue}
+  <ellipse cx="32" cy="43" rx="3" ry="2.3" fill="#1b1b1b"/>
+  <path d="M32 45 Q32 49 28 50 M32 45 Q32 49 36 50" stroke="#1b1b1b" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+  ${band}</svg>`;
+}
+const PAW=`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="32" fill="#efe9fb"/>
+  <ellipse cx="32" cy="41" rx="11" ry="9" fill="#8b6fd4"/>
+  <ellipse cx="19" cy="29" rx="4.3" ry="5.8" fill="#8b6fd4"/><ellipse cx="45" cy="29" rx="4.3" ry="5.8" fill="#8b6fd4"/>
+  <ellipse cx="26" cy="21" rx="3.8" ry="5.2" fill="#8b6fd4"/><ellipse cx="38" cy="21" rx="3.8" ry="5.2" fill="#8b6fd4"/></svg>`;
+const WBADGE=`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="32" fill="#8b6fd4"/>
+  <path d="M15 13 L11 27 L24 22 Z" fill="#6f4fc0"/><path d="M49 13 L53 27 L40 22 Z" fill="#6f4fc0"/>
+  <text x="32" y="45" font-family="Georgia,serif" font-size="30" font-weight="bold" fill="#fff" text-anchor="middle">W</text></svg>`;
+const SIL=`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="32" fill="#e3dbf5"/>
+  <g fill="#4a3f6b"><path d="M18 12 L14 30 L27 25 Z"/><path d="M46 12 L50 30 L37 25 Z"/>
+  <path d="M32 18 C21 18 17 30 17 39 C17 50 24 55 32 55 C40 55 47 50 47 39 C47 30 43 18 32 18 Z"/></g>
+  <ellipse cx="32" cy="46" rx="7" ry="5.5" fill="#e3dbf5"/><circle cx="32" cy="42" r="2.5" fill="#4a3f6b"/></svg>`;
+const LINE=`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="31" fill="#fff" stroke="#8b6fd4" stroke-width="2"/>
+  <g fill="none" stroke="#5a4a82" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+  <path d="M18 13 L14 29 L26 24"/><path d="M46 13 L50 29 L38 24"/>
+  <path d="M32 18 C21 18 17 30 17 39 C17 50 24 54 32 54 C40 54 47 50 47 39 C47 30 43 18 32 18 Z"/>
+  <ellipse cx="32" cy="45" rx="7" ry="5.5"/></g>
+  <circle cx="25" cy="35" r="1.7" fill="#5a4a82"/><circle cx="39" cy="35" r="1.7" fill="#5a4a82"/><circle cx="32" cy="42" r="2" fill="#5a4a82"/></svg>`;
+const GEO=`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="32" fill="#efe9fb"/>
+  <polygon points="18,12 14,30 27,24" fill="#5a4a82"/><polygon points="46,12 50,30 37,24" fill="#5a4a82"/>
+  <polygon points="32,18 17,38 32,40" fill="#7a6aa8"/><polygon points="32,18 47,38 32,40" fill="#8b78be"/>
+  <polygon points="17,38 32,40 24,52" fill="#e9e2f5"/><polygon points="47,38 32,40 40,52" fill="#f2ecfa"/>
+  <polygon points="24,52 32,40 40,52 32,56" fill="#fff"/>
+  <circle cx="25" cy="34" r="2" fill="#3aa0ff"/><circle cx="39" cy="34" r="2" fill="#3aa0ff"/><circle cx="32" cy="44" r="2.2" fill="#1b1b1b"/></svg>`;
+
+const DUBS=[
+  {n:"Classic Dubs", s:"clean husky face", svg:face()},
+  {n:"Purple Pup", s:"on UW lavender", svg:face({bg:'#8b6fd4'})},
+  {n:"Bandana Dubs", s:"purple bandana", svg:face({band:true})},
+  {n:"Sleepy Dubs", s:"happy closed eyes", svg:face({eyes:'happy'})},
+  {n:"Tongue Out", s:"playful boi", svg:face({tongue:true,eyes:'happy'})},
+  {n:"Paw", s:"simple paw print", svg:PAW},
+  {n:"W Badge", s:"UW dub-W + ears", svg:WBADGE},
+  {n:"Silhouette", s:"minimal solid", svg:SIL},
+  {n:"Line Art", s:"outline only", svg:LINE},
+  {n:"Geometric", s:"low-poly husky", svg:GEO},
+];
+document.getElementById('grid').innerHTML = DUBS.map((d,i)=>`<div class="card">
+  <div class="big">${d.svg}</div>
+  <div class="mini"><div class="av">${d.svg}</div><div class="bbl">hey Dawg 🐾</div></div>
+  <div class="label"><b>${i+1}</b> · ${d.n}<small>${d.s}</small></div>
+</div>`).join('');
+</script>
+</body>
+</html>

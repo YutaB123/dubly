@@ -26,10 +26,10 @@ _DECK_TEMPLATE = Template(
 <meta name="color-scheme" content="dark">
 <title>{{ title }}</title>
 <style>
-  :root { --bg:#1a1033; --accent1:#4b2e83; --accent2:#b7a57a; --text:#efeaf6; --muted:#a99fc7; }
+  :root { --bg:#efe9fb; --accent1:#8b6fd4; --accent2:#a98ee0; --text:#3a2f55; --muted:#8a7fa5; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { margin:0; height:100%; color:var(--text);
-    background:radial-gradient(125% 75% at 50% -8%, #3a2370 0%, #1a1033 52%) fixed, var(--bg);
+    background:radial-gradient(125% 75% at 50% -8%, #f3eefc 0%, #efe9fb 52%) fixed, var(--bg);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
   #wrap { display:flex; flex-direction:column; height:100dvh;
     padding:max(env(safe-area-inset-top),12px) 14px calc(env(safe-area-inset-bottom) + 12px); }
@@ -37,7 +37,7 @@ _DECK_TEMPLATE = Template(
   header .title { font-weight:600; font-size:16px; flex:1; min-width:0;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   header .counter { color:var(--muted); font-size:14px; font-variant-numeric:tabular-nums; }
-  .progress { height:4px; border-radius:3px; background:#3a2a5e; margin-top:8px; overflow:hidden; }
+  .progress { height:4px; border-radius:3px; background:#ddd2f0; margin-top:8px; overflow:hidden; }
   .progress > div { height:100%; width:0; border-radius:3px;
     background:linear-gradient(90deg,var(--accent1),var(--accent2)); transition:width .25s; }
   main { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }
@@ -48,21 +48,21 @@ _DECK_TEMPLATE = Template(
   .face { position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden;
     border-radius:22px; padding:26px; display:flex; flex-direction:column; gap:14px;
     align-items:center; justify-content:center; text-align:center;
-    border:1px solid #3a2a5e; box-shadow:0 18px 50px rgba(0,0,0,.45); }
-  .face.front { background:linear-gradient(160deg,#2c1d4e,#241544); }
-  .face.back { background:linear-gradient(160deg,#2c1d4e,#1a1033); transform:rotateY(180deg); }
+    border:1px solid #ddd2f0; box-shadow:0 18px 50px rgba(0,0,0,.45); }
+  .face.front { background:linear-gradient(160deg,#ffffff,#e3dbf5); }
+  .face.back { background:linear-gradient(160deg,#ffffff,#efe9fb); transform:rotateY(180deg); }
   .label { font-size:12px; letter-spacing:.14em; color:var(--muted); text-transform:uppercase; }
-  .face.back .label { color:#cbb87e; }
+  .face.back .label { color:#8b6fd4; }
   .text { font-size:21px; line-height:1.4; white-space:pre-wrap; overflow-y:auto; max-height:100%; }
   .hint { color:var(--muted); font-size:13px; }
   footer { display:flex; align-items:center; justify-content:center; gap:12px; }
   .nav { width:58px; height:46px; border:none; border-radius:14px; font-size:18px; color:#fff; cursor:pointer;
-    background:linear-gradient(135deg,var(--accent1),var(--accent2)); box-shadow:0 4px 14px rgba(75,46,131,.35); }
+    background:linear-gradient(135deg,var(--accent1),var(--accent2)); box-shadow:0 4px 14px rgba(139,111,212,.35); }
   .nav:disabled { opacity:.35; box-shadow:none; }
   .nav:active { transform:scale(.94); }
-  .ghost { border:1px solid #574a7a; background:#2c1d4e; color:var(--text); border-radius:14px;
+  .ghost { border:1px solid #cbbce8; background:#ffffff; color:var(--text); border-radius:14px;
     height:46px; padding:0 16px; font-size:14px; cursor:pointer; }
-  .ghost:active { background:#382a5e; }
+  .ghost:active { background:#e8def8; }
   .done { color:var(--muted); font-size:14px; text-align:center; }
 </style></head>
 <body>
@@ -148,11 +148,11 @@ def render_exam(title: str, cards: list[dict], page_id: str = "") -> str:
 # --- Interactive quizzes (graded multiple-choice / type-your-answer) ---------
 
 _QUIZ_STYLE = """
-  :root { --bg:#1a1033; --accent1:#4b2e83; --accent2:#b7a57a; --text:#efeaf6; --muted:#a99fc7;
+  :root { --bg:#efe9fb; --accent1:#8b6fd4; --accent2:#a98ee0; --text:#3a2f55; --muted:#8a7fa5;
     --good:#31d158; --bad:#ff5d5d; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { margin:0; height:100%; color:var(--text);
-    background:radial-gradient(125% 75% at 50% -8%, #3a2370 0%, #1a1033 52%) fixed, var(--bg);
+    background:radial-gradient(125% 75% at 50% -8%, #f3eefc 0%, #efe9fb 52%) fixed, var(--bg);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
   #wrap { display:flex; flex-direction:column; height:100dvh;
     padding:max(env(safe-area-inset-top),12px) 14px calc(env(safe-area-inset-bottom) + 12px); }
@@ -160,38 +160,38 @@ _QUIZ_STYLE = """
   header .title { font-weight:600; font-size:16px; flex:1; min-width:0;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   header .counter { color:var(--muted); font-size:14px; font-variant-numeric:tabular-nums; }
-  .progress { height:4px; border-radius:3px; background:#3a2a5e; margin-top:8px; overflow:hidden; }
+  .progress { height:4px; border-radius:3px; background:#ddd2f0; margin-top:8px; overflow:hidden; }
   .progress > div { height:100%; width:0; border-radius:3px;
     background:linear-gradient(90deg,var(--accent1),var(--accent2)); transition:width .25s; }
   main { flex:1; display:flex; flex-direction:column; gap:14px; padding-top:14px; overflow-y:auto; }
   .question { font-size:20px; line-height:1.4; }
   .choices { display:flex; flex-direction:column; gap:10px; }
-  .choice { text-align:left; padding:14px 16px; border-radius:14px; border:1px solid #574a7a;
-    background:#2c1d4e; color:var(--text); font-size:16px; cursor:pointer; transition:transform .08s; }
+  .choice { text-align:left; padding:14px 16px; border-radius:14px; border:1px solid #cbbce8;
+    background:#ffffff; color:var(--text); font-size:16px; cursor:pointer; transition:transform .08s; }
   .choice:active { transform:scale(.99); }
   .choice:disabled { cursor:default; }
   .choice.correct { background:rgba(49,209,88,.18); border-color:var(--good); }
   .choice.wrong { background:rgba(255,93,93,.16); border-color:var(--bad); }
   .explain { color:var(--muted); font-size:15px; line-height:1.45; display:none; }
   .explain.show { display:block; }
-  textarea { width:100%; min-height:120px; resize:vertical; border-radius:14px; border:1px solid #574a7a;
-    background:#160d2b; color:var(--text); padding:12px 14px; font-size:16px; font-family:inherit; }
-  .model { display:none; background:#2c1d4e; border:1px solid #574a7a; border-radius:14px; padding:12px 14px;
+  textarea { width:100%; min-height:120px; resize:vertical; border-radius:14px; border:1px solid #cbbce8;
+    background:#ffffff; color:var(--text); padding:12px 14px; font-size:16px; font-family:inherit; }
+  .model { display:none; background:#ffffff; border:1px solid #cbbce8; border-radius:14px; padding:12px 14px;
     font-size:16px; line-height:1.45; }
   .model.show { display:block; }
-  .model .lbl { color:#cbb87e; font-size:12px; letter-spacing:.12em; text-transform:uppercase; display:block;
+  .model .lbl { color:#8b6fd4; font-size:12px; letter-spacing:.12em; text-transform:uppercase; display:block;
     margin-bottom:6px; }
   .grade { display:none; gap:10px; }
   .grade.show { display:flex; }
   footer { display:flex; align-items:center; justify-content:center; gap:12px; padding-top:12px; }
   button.btn { border:none; border-radius:14px; height:48px; padding:0 20px; font-size:16px; color:#fff;
     cursor:pointer; background:linear-gradient(135deg,var(--accent1),var(--accent2));
-    box-shadow:0 4px 14px rgba(75,46,131,.35); }
+    box-shadow:0 4px 14px rgba(139,111,212,.35); }
   button.btn:disabled { opacity:.35; box-shadow:none; }
   button.btn:active { transform:scale(.97); }
   button.good { background:linear-gradient(135deg,#2fb85a,#31d158); }
   button.bad { background:linear-gradient(135deg,#ff7676,#ff5d5d); }
-  .ghost { border:1px solid #574a7a; background:#2c1d4e; color:var(--text); border-radius:14px;
+  .ghost { border:1px solid #cbbce8; background:#ffffff; color:var(--text); border-radius:14px;
     height:46px; padding:0 18px; font-size:15px; cursor:pointer; }
   .done { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; }
   .bigscore { font-size:48px; font-weight:700;
