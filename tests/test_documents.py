@@ -5,10 +5,11 @@ from __future__ import annotations
 import io
 import zipfile
 
-from app.documents import DocumentService, render_docx, render_pdf
+from app.documents import DocumentService, render_docx, render_pdf, render_pptx
 from app.db import FileStore
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
 
 class FakeSms:
@@ -78,6 +79,54 @@ def test_make_document_sends_downloadable_docx_and_copies_to_onedrive(tmp_path):
 
     # Also copied into the OneDrive folder.
     assert od.uploaded and od.uploaded[0][0] == "STAT 311 Study Guide.docx"
+
+
+def test_render_pptx_makes_a_valid_deck_with_the_content():
+    data = render_pptx("STAT 311 Guide", "Key Ideas:\nfirst point\nsecond point")
+    assert data[:2] == b"PK"
+    import io
+    from pptx import Presentation
+    prs = Presentation(io.BytesIO(data))
+    blob = " ".join(sh.text_frame.text for s in prs.slides for sh in s.shapes if sh.has_text_frame)
+    assert "STAT 311 Guide" in blob
+    assert "first point" in blob and "second point" in blob
+
+
+def _doc_svc(tmp_path):
+    sms = FakeSms()
+    files = FileStore(tmp_path / "f.sqlite")
+    svc = DocumentService(sms=sms, files=files, public_base_url="https://app.example", onedrive=None)
+    return svc, sms, files
+
+
+def _stored(sms, files):
+    fid = sms.sent[0][1][0].rsplit("/", 1)[1]
+    return files.get(fid)
+
+
+def test_make_document_pdf_format(tmp_path):
+    svc, sms, files = _doc_svc(tmp_path)
+    svc.dispatch("make_document", {"title": "Notes", "content": "hi", "format": "pdf"})
+    filename, ctype, data = _stored(sms, files)
+    assert filename == "Notes.pdf"
+    assert ctype == "application/pdf"
+    assert data[:4] == b"%PDF"
+
+
+def test_make_document_powerpoint_format(tmp_path):
+    svc, sms, files = _doc_svc(tmp_path)
+    svc.dispatch("make_document", {"title": "Deck", "content": "Topic:\npoint", "format": "powerpoint"})
+    filename, ctype, data = _stored(sms, files)
+    assert filename == "Deck.pptx"
+    assert ctype == PPTX_MIME
+    assert data[:2] == b"PK"
+
+
+def test_make_document_defaults_to_word(tmp_path):
+    svc, sms, files = _doc_svc(tmp_path)
+    svc.dispatch("make_document", {"title": "Plain", "content": "x"})
+    filename, ctype, _ = _stored(sms, files)
+    assert filename == "Plain.docx" and ctype == DOCX_MIME
 
 
 def test_make_document_works_without_onedrive(tmp_path):

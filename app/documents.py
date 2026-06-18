@@ -20,11 +20,13 @@ DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.docu
 DOCUMENT_TOOLS = [
     {
         "name": "make_document",
-        "description": "Create a downloadable Word (.docx) document from text and SEND it to the "
-        "student (also saved to their files folder). Use whenever they ask you to write "
-        "something up as a file or document they can download — a study guide, summary, notes, "
-        "outline, cheat sheet, essay blueprint, etc. You write the full content yourself in "
-        "'content'.",
+        "description": "Create a downloadable file from text and SEND it to the student. Use "
+        "whenever they ask you to write something up as a file they can download — a study guide, "
+        "summary, notes, outline, cheat sheet, essay blueprint, slides, etc. You write the full "
+        "content yourself in 'content'. Pick 'format': 'word' (.docx, default), 'pdf', or "
+        "'powerpoint' (.pptx slides) — match what they ask for ('make a PDF', 'make a powerpoint'). "
+        "For powerpoint, write the content as sections separated by a blank line, each starting "
+        "with a short heading line followed by bullet lines (one slide per section).",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -34,7 +36,12 @@ DOCUMENT_TOOLS = [
                 },
                 "content": {
                     "type": "string",
-                    "description": "The full document text. Plain text; blank lines between paragraphs.",
+                    "description": "The full document text. Plain text; blank lines between paragraphs/sections.",
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["word", "pdf", "powerpoint"],
+                    "description": "File type to produce. Default 'word'.",
                 },
             },
             "required": ["title", "content"],
@@ -117,9 +124,62 @@ def render_docx(title: str, content: str) -> bytes:
     return buf.getvalue()
 
 
+# --- PowerPoint (.pptx) via python-pptx --------------------------------------
+
+PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+
+def render_pptx(title: str, content: str) -> bytes:
+    """A slide deck: a title slide, then one slide per blank-line-separated section
+    (first line of each section is the slide heading, the rest become bullets)."""
+    from pptx import Presentation
+    from pptx.util import Pt
+
+    prs = Presentation()
+    title_slide = prs.slides.add_slide(prs.slide_layouts[0])
+    title_slide.shapes.title.text = title
+    if len(title_slide.placeholders) > 1:
+        title_slide.placeholders[1].text = "made by Dubly 🐾"
+
+    sections = [s for s in content.split("\n\n") if s.strip()]
+    if not sections:
+        sections = [content] if content.strip() else []
+    for sec in sections:
+        lines = [ln.strip() for ln in sec.splitlines() if ln.strip()]
+        if not lines:
+            continue
+        heading = lines[0].rstrip(":")
+        bullets = [ln.lstrip("-•* ") for ln in lines[1:]] or [heading]
+        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        slide.shapes.title.text = heading
+        body = slide.placeholders[1].text_frame
+        body.text = bullets[0]
+        for b in bullets[1:]:
+            p = body.add_paragraph()
+            p.text = b
+        for p in body.paragraphs:
+            for run in p.runs:
+                run.font.size = Pt(18)
+
+    buf = io.BytesIO()
+    prs.save(buf)
+    return buf.getvalue()
+
+
+# extension + MIME for each format the document tool can produce.
+_FORMATS = {
+    "pdf": (".pdf", "application/pdf"),
+    "powerpoint": (".pptx", PPTX_MIME),
+    "pptx": (".pptx", PPTX_MIME),
+    "slides": (".pptx", PPTX_MIME),
+    "presentation": (".pptx", PPTX_MIME),
+    "word": (".docx", DOCX_MIME),
+    "docx": (".docx", DOCX_MIME),
+}
+
+
 def _safe_name(title: str) -> str:
-    name = re.sub(r"[^\w\- ]", "", title).strip() or "document"
-    return f"{name}.docx"
+    return re.sub(r"[^\w\- ]", "", title).strip() or "document"
 
 
 class DocumentService:
@@ -140,14 +200,21 @@ class DocumentService:
             return f"(unknown document tool: {name})"
         title = (tool_input.get("title") or "document").strip()
         content = tool_input.get("content") or ""
-        data = render_docx(title, content)
-        filename = _safe_name(title)
+        fmt = (tool_input.get("format") or "word").strip().lower()
+        ext, mime = _FORMATS.get(fmt, _FORMATS["word"])
+        if ext == ".pdf":
+            data = render_pdf(title, content)
+        elif ext == ".pptx":
+            data = render_pptx(title, content)
+        else:
+            data = render_docx(title, content)
+        filename = _safe_name(title) + ext
         file_id = uuid.uuid4().hex
-        self.files.save(file_id, filename, DOCX_MIME, data)
+        self.files.save(file_id, filename, mime, data)
         # Also drop a copy in their OneDrive folder (so it's on the laptop too).
         if self.onedrive is not None:
             try:
-                self.onedrive.upload(filename, data, DOCX_MIME)
+                self.onedrive.upload(filename, data, mime)
             except Exception:
                 pass
         self.sms.send(
