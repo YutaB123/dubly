@@ -39,6 +39,8 @@
   .iconbtn { width:38px; height:38px; border:none; background:transparent; color:var(--text);
     font-size:20px; border-radius:50%; cursor:pointer; flex:0 0 auto; }
   .iconbtn:active { background:var(--line); }
+  /* Header sits on the purple bar -> its chat (☰) and menu (⋯) icons are white. */
+  #drawerBtn, #menuBtn { color:#fff; }
   #menu { position:absolute; top:calc(max(env(safe-area-inset-top),10px) + 42px); right:8px;
     background:var(--surface); border:1px solid var(--line); border-radius:12px; overflow:hidden; z-index:9;
     box-shadow:0 8px 30px rgba(0,0,0,.5); min-width:210px; }
