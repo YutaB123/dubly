@@ -249,7 +249,7 @@ def _web_authed(deps: AppDeps, key: str) -> bool:
 _CLEAR_CMDS = {"clear", "clear chat", "clear all", "clear everything", "reset"}
 
 GREETING = (
-    "hey Dawg 🐾 i'm Dubly, your husky study buddy. ask me what's due, your grades, the syllabus, "
+    "hey 🐾 i'm Dubly, your husky study buddy. ask me what's due, your grades, the syllabus, "
     "anything canvas, or i can build you a study guide, quiz, or essay blueprint to get you started."
 )
 
@@ -266,19 +266,27 @@ def _course_label(course) -> str:
 
 
 def _greeting_text(deps: AppDeps) -> str:
-    """The opening hello. When Canvas is wired up, list the student's classes."""
-    courses = []
+    """The opening hello. Greets the student by name and lists their classes."""
+    first, courses = "", []
     if deps.canvas is not None:
         try:
-            # Only real classes (department + 3-digit number); same rule as everywhere.
+            full = deps.canvas.get_user_name() if hasattr(deps.canvas, "get_user_name") else ""
+            first = (full or "").split()[0] if full else ""
+        except Exception:
+            first = ""
+        try:
             courses = [c for c in deps.canvas.list_courses() if is_real_class(c.code)]
         except Exception:
             courses = []
+    hello = f"hey {first} 🐾" if first else "hey 🐾"
     if not courses:
-        return GREETING
+        return (
+            f"{hello} i'm Dubly, your husky study buddy. ask me what's due, your grades, the "
+            "syllabus, anything canvas, or i can build you a study guide, quiz, or essay blueprint."
+        )
     lines = "\n".join(f"• {_course_label(c)}" for c in courses)
     return (
-        "hey Dawg 🐾 i'm Dubly. here are the classes i see you're enrolled in this quarter:\n"
+        f"{hello} i'm Dubly. here are the classes i see you're enrolled in this quarter:\n"
         f"{lines}\n\n"
         "ask me what's due, your grades, the syllabus, anything canvas, "
         "or i can build you a study guide, quiz, or essay blueprint to get you started."
@@ -622,7 +630,7 @@ def create_app() -> FastAPI:
     from app.canvas import CanvasClient
     from app.sms import SmsClient
     from app.tools import ToolBox
-    from app.brain import Brain
+    from app.brain import Brain, SYSTEM_PROMPT
     from app.db import (
         ConversationStore,
         StudyPageStore,
@@ -715,10 +723,23 @@ def create_app() -> FastAPI:
         onedrive=onedrive,
     )
     toolbox = ToolBox(canvas=canvas, reminders=reminders, study=study, documents=documents)
+    # Personalize: greet the student by name instead of a generic "Dawg".
+    try:
+        _full = canvas.get_user_name()
+        _first = _full.split()[0] if _full else ""
+    except Exception:
+        _first = ""
+    sys_prompt = SYSTEM_PROMPT
+    if _first:
+        sys_prompt += (
+            f"\n- The student's name is {_first}. When you greet them, use their name "
+            f'("hey {_first}"); never call them "Dawg".'
+        )
     brain = Brain(
         client=anthropic_client,
         model=settings.brain_model,
         toolbox=toolbox,
+        system_prompt=sys_prompt,
     )
 
     deps = AppDeps(

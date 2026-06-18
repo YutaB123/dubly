@@ -506,6 +506,19 @@ class CanvasClient:
             )
         return out
 
+    def get_user_name(self) -> str:
+        """The student's name from Canvas (prefers the short name, e.g. 'Vlad')."""
+        return self._cached("user_name", self._fetch_user_name)
+
+    def _fetch_user_name(self) -> str:
+        try:
+            data = self._get("/users/self")
+        except Exception:
+            return ""
+        if isinstance(data, dict):
+            return (data.get("short_name") or data.get("name") or "").strip()
+        return ""
+
     def get_grade_breakdown(self, course: str) -> list[GradeGroup]:
         """Assignment groups with their weights + the student's score on each item.
         The source for 'what do I need on X to get a Y' grade math."""

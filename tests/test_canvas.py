@@ -369,6 +369,14 @@ def test_syllabus_url_unknown_course_is_empty():
     assert client.syllabus_url("art history") == ""
 
 
+def test_get_user_name_returns_first_name():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/users/self"
+        return httpx.Response(200, json={"name": "Vlad Bani", "short_name": "Vlad"})
+
+    assert make_client(handler).get_user_name() == "Vlad"
+
+
 def test_get_grade_breakdown_returns_groups_weights_and_scores():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v1/courses":
