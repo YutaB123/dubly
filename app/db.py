@@ -424,3 +424,63 @@ class FileStore:
             (file_id,),
         ).fetchone()
         return (row[0], row[1], row[2]) if row else None
+
+
+class LectureStore:
+    """Saved lecture transcripts (from a pasted/uploaded transcript or a
+    Whisper-transcribed recording) so the student can ask about them and make
+    study material from them. One lecture fits Claude's context, so the full
+    transcript is stored and handed back whole — no chunking/embeddings."""
+
+    def __init__(self, path: str | Path):
+        self.path = str(path)
+        self._db = sqlite3.connect(self.path, check_same_thread=False)
+        self._db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lecture (
+                id         TEXT PRIMARY KEY,
+                title      TEXT NOT NULL,
+                transcript TEXT NOT NULL,
+                source     TEXT NOT NULL DEFAULT 'transcript',
+                created_at TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        self._db.commit()
+
+    def save(self, lecture_id: str, title: str, transcript: str,
+             source: str = "transcript", created_at: str = "") -> None:
+        self._db.execute(
+            "INSERT OR REPLACE INTO lecture (id, title, transcript, source, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (lecture_id, title, transcript, source, created_at),
+        )
+        self._db.commit()
+
+    def get(self, lecture_id: str) -> tuple[str, str] | None:
+        """(title, transcript) for an exact id, or None."""
+        row = self._db.execute(
+            "SELECT title, transcript FROM lecture WHERE id = ?", (lecture_id,)
+        ).fetchone()
+        return (row[0], row[1]) if row else None
+
+    def find_by_title(self, query: str) -> tuple[str, str, str] | None:
+        """Newest lecture whose title loosely matches `query` -> (id, title, transcript)."""
+        q = f"%{(query or '').strip().lower()}%"
+        row = self._db.execute(
+            "SELECT id, title, transcript FROM lecture "
+            "WHERE lower(title) LIKE ? ORDER BY created_at DESC LIMIT 1",
+            (q,),
+        ).fetchone()
+        return (row[0], row[1], row[2]) if row else None
+
+    def list(self) -> list[dict]:
+        rows = self._db.execute(
+            "SELECT id, title, source, length(transcript) FROM lecture "
+            "ORDER BY created_at DESC"
+        ).fetchall()
+        return [{"id": r[0], "title": r[1], "source": r[2], "chars": r[3]} for r in rows]
+
+    def clear(self) -> None:
+        self._db.execute("DELETE FROM lecture")
+        self._db.commit()

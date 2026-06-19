@@ -399,34 +399,34 @@ def render_quiz_written(title: str, questions: list[dict], page_id: str = "") ->
 STUDY_TOOLS = [
     {
         "name": "make_flashcards",
-        "description": "Make a flashcard deck to study a course (or one topic within "
-        "it) and return a link to an interactive deck. Pass 'course' (the course code "
-        "or name, e.g. 'STAT 311'). For final-exam prep, pass just the course to cover "
-        "the whole course. Optionally pass 'topic' to focus (e.g. 'hypothesis testing') "
-        "and 'count'.",
+        "description": "Make a flashcard deck and return a link to an interactive deck. "
+        "Build from a COURSE (pass 'course', e.g. 'STAT 311') OR from a SAVED LECTURE "
+        "(pass 'lecture_id' from list_lectures — use this when they say 'make flashcards "
+        "from that lecture'). Provide course OR lecture_id, not both. Optionally 'topic' "
+        "to focus and 'count'.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "course": {"type": "string", "description": "Course code or name, e.g. 'STAT 311'."},
+                "lecture_id": {"type": "string", "description": "Build from a saved lecture's transcript instead of a course. Pass the id from list_lectures; when set, ignore 'course'."},
                 "topic": {"type": "string", "description": "Optional: focus the deck on one topic/unit."},
                 "count": {"type": "integer", "description": "Roughly how many cards (default 15)."},
             },
-            "required": ["course"],
         },
     },
     {
         "name": "make_practice_exam",
-        "description": "Make a short interactive quiz to study a course (or one topic "
-        "within it) and return a link to it. Pass 'course'; optionally 'topic' and 'count'. "
-        "Use 'format' to choose the quiz type: 'multiple_choice' (default) builds a graded "
-        "pick-the-right-option quiz with a score; 'written' builds a quiz the student types "
-        "their answers into, then reveals the model answer to self-check. When the student "
-        "asks for a 'multiple choice quiz' use multiple_choice; when they want to 'type "
-        "answers' or want 'short answer / written' questions, use written.",
+        "description": "Make a short interactive quiz and return a link to it. Build from a "
+        "COURSE (pass 'course') OR from a SAVED LECTURE (pass 'lecture_id' from list_lectures "
+        "— use this when they say 'quiz me on that lecture'). Provide course OR lecture_id, "
+        "not both. Optionally 'topic' and 'count'. Use 'format': 'multiple_choice' (default) "
+        "builds a graded pick-the-right-option quiz with a score; 'written' builds a quiz the "
+        "student types answers into, then reveals the model answer to self-check.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "course": {"type": "string", "description": "Course code or name, e.g. 'STAT 311'."},
+                "lecture_id": {"type": "string", "description": "Build from a saved lecture's transcript instead of a course. Pass the id from list_lectures; when set, ignore 'course'."},
                 "topic": {"type": "string", "description": "Optional: focus on one topic/unit."},
                 "count": {"type": "integer", "description": "Roughly how many questions (default 10)."},
                 "format": {
@@ -435,7 +435,6 @@ STUDY_TOOLS = [
                     "description": "'multiple_choice' (graded options) or 'written' (type your answer).",
                 },
             },
-            "required": ["course"],
         },
     },
 ]
@@ -517,12 +516,13 @@ _MC_SCHEMA = {
 
 
 class StudyService:
-    def __init__(self, canvas, client, model: str, pages, public_base_url: str):
+    def __init__(self, canvas, client, model: str, pages, public_base_url: str, lectures=None):
         self.canvas = canvas
         self.client = client
         self.model = model
         self.pages = pages
         self.public_base_url = public_base_url.rstrip("/")
+        self.lectures = lectures
 
     def tool_names(self) -> list[str]:
         return [t["name"] for t in STUDY_TOOLS]
@@ -546,10 +546,17 @@ class StudyService:
             course = str(tool_input["ref"]).split(":")[0].strip()
         return course
 
-    def _instruction(self, kind: str, count: int, label: str, topic: str) -> str:
+    def _instruction(self, kind: str, count: int, label: str, topic: str, is_lecture: bool = False) -> str:
         focus = (
             f"the topic \"{topic}\" in {label}" if topic
-            else f"{label} (whole-course review for the final exam)"
+            else (f"the lecture \"{label}\"" if is_lecture
+                  else f"{label} (whole-course review for the final exam)")
+        )
+        material_line = (
+            "Below is the transcript of the lecture. "
+            if is_lecture else
+            "Below is the course material gathered from Canvas: the syllabus, a topic "
+            "outline (the course modules), and the assignment list. "
         )
         if kind == "flashcards":
             what = f"about {count} study flashcards (focused question / concise answer pairs)"
@@ -566,8 +573,7 @@ class StudyService:
             )
         return (
             f"Make {what} to help a student prepare for {focus}. "
-            "Below is the course material gathered from Canvas: the syllabus, a topic "
-            "outline (the course modules), and the assignment list. Cover the most "
+            f"{material_line}Cover the most "
             "important concepts a student at this level should know. If the material "
             "names topics but is thin on detail, use your own accurate knowledge of the "
             "subject to write correct, useful items on exactly those topics. Do NOT "
@@ -596,14 +602,21 @@ class StudyService:
         )
         return json.loads(text)
 
-    def _build(self, kind, course, topic, count, fmt, page_id):
+    def _build(self, kind, course, topic, count, fmt, page_id, lecture_id=""):
         """Generate + render a study page. Returns (title, html, note)."""
-        label, source = self.canvas.get_study_material(course)
+        is_lec = bool(lecture_id)
+        if is_lec:
+            hit = self.lectures.get(lecture_id) if self.lectures is not None else None
+            if not hit:
+                raise ValueError(f"lecture {lecture_id} not found")
+            label, source = hit[0], hit[1][:40000]
+        else:
+            label, source = self.canvas.get_study_material(course)
         suffix = f" - {topic}" if topic else ""
 
         if kind == "flashcards":
             data = self._generate(
-                self._instruction("flashcards", count, label, topic), source, _FLASHCARD_SCHEMA
+                self._instruction("flashcards", count, label, topic, is_lec), source, _FLASHCARD_SCHEMA
             )
             cards = data.get("cards", [])
             title = f"{label}{suffix} - flashcards"
@@ -611,30 +624,35 @@ class StudyService:
 
         if fmt in ("written", "typed", "short_answer", "free_response"):
             data = self._generate(
-                self._instruction("written", count, label, topic), source, _WRITTEN_SCHEMA
+                self._instruction("written", count, label, topic, is_lec), source, _WRITTEN_SCHEMA
             )
             questions = data.get("questions", [])
             title = f"{label}{suffix} - Quiz"
             return title, render_quiz_written(title, questions, page_id), "here you go"
 
         data = self._generate(
-            self._instruction("mc", count, label, topic), source, _MC_SCHEMA
+            self._instruction("mc", count, label, topic, is_lec), source, _MC_SCHEMA
         )
         questions = data.get("questions", [])
         title = f"{label}{suffix} - Quiz"
         return title, render_quiz_mc(title, questions, page_id), "here you go"
 
     def _make(self, tool_input: dict, kind: str) -> str:
+        lecture_id = (tool_input.get("lecture_id") or "").strip()
         course = self._course_arg(tool_input)
         topic = (tool_input.get("topic") or "").strip()
         count = int(tool_input.get("count") or (15 if kind == "flashcards" else 10))
         fmt = (tool_input.get("format") or "multiple_choice").strip().lower()
 
         page_id = uuid.uuid4().hex
-        title, html, note = self._build(kind, course, topic, count, fmt, page_id)
+        try:
+            title, html, note = self._build(kind, course, topic, count, fmt, page_id, lecture_id)
+        except ValueError:
+            return "couldn't find that lecture - run list_lectures first to get its id."
         # Remember the recipe so the page's "new questions" button can rebuild it.
         meta = json.dumps(
-            {"kind": kind, "course": course, "topic": topic, "count": count, "format": fmt}
+            {"kind": kind, "course": course, "topic": topic, "count": count,
+             "format": fmt, "lecture_id": lecture_id}
         )
         self.pages.save(page_id, title, html, meta)
         link = f"{self.public_base_url}/study/{page_id}"
@@ -652,6 +670,7 @@ class StudyService:
         title, html, _ = self._build(
             m.get("kind", "exam"), m.get("course", ""), m.get("topic", ""),
             int(m.get("count") or 10), m.get("format", "") or "multiple_choice", page_id,
+            m.get("lecture_id", ""),
         )
         self.pages.save(page_id, title, html, raw)
         return True

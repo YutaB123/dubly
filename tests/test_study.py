@@ -217,6 +217,9 @@ def test_tool_names_and_schemas(tmp_path):
     svc, _, _ = make_service(tmp_path, {"cards": []})
     assert set(svc.tool_names()) == {"make_flashcards", "make_practice_exam"}
     assert {s["name"] for s in svc.schemas()} == set(svc.tool_names())
-    # Course is the required input now.
+    # Either a course OR a saved lecture works, so neither is hard-required;
+    # both inputs are still offered.
     for s in svc.schemas():
-        assert s["input_schema"]["required"] == ["course"]
+        assert "required" not in s["input_schema"]
+        props = s["input_schema"]["properties"]
+        assert "course" in props and "lecture_id" in props

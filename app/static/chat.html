@@ -77,6 +77,27 @@
   #deckOverlay #deckClose { position:absolute; top:max(env(safe-area-inset-top),10px); right:12px;
     width:40px; height:40px; border-radius:50%; border:none; cursor:pointer; font-size:18px; color:#fff;
     background:rgba(58,47,85,.85); backdrop-filter:blur(6px); box-shadow:0 2px 10px rgba(0,0,0,.4); }
+  #lectureOverlay { position:fixed; inset:0; z-index:50; background:rgba(20,12,36,.5);
+    display:flex; align-items:center; justify-content:center; padding:18px; }
+  .lec-card { width:100%; max-width:460px; background:var(--surface); color:var(--text); border:1px solid var(--line);
+    border-radius:18px; padding:20px; box-shadow:0 18px 50px rgba(40,20,80,.35); max-height:90vh; overflow:auto; }
+  .lec-card h2 { margin:0 0 6px; font-size:19px; }
+  .lec-hint { margin:0 0 14px; color:var(--muted); font-size:13px; line-height:1.5; }
+  .lec-card input[type=text], .lec-card textarea { width:100%; box-sizing:border-box; background:var(--bg);
+    color:var(--text); border:1px solid var(--line); border-radius:12px; padding:11px 13px; font:inherit; outline:none; }
+  .lec-card textarea { margin-top:10px; min-height:140px; resize:vertical; }
+  .lec-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; flex-wrap:wrap; }
+  .lec-file { display:inline-flex; align-items:center; gap:6px; cursor:pointer; color:var(--link); font-size:14px;
+    border:1px dashed var(--line); border-radius:10px; padding:8px 12px; }
+  .lec-bm { color:var(--muted); font-size:13px; text-decoration:none; }
+  .lec-bm:hover { color:var(--link); }
+  .lec-status { margin-top:12px; min-height:18px; font-size:13px; color:var(--muted); }
+  .lec-status.err { color:#d9534f; }
+  .lec-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:14px; }
+  .lec-actions button { font:inherit; font-weight:600; border-radius:11px; padding:10px 18px; cursor:pointer; border:none; }
+  .lec-ghost { background:var(--press); color:var(--text); }
+  .lec-primary { background:var(--me); color:#fff; }
+  .lec-primary:disabled { opacity:.6; cursor:default; }
   .dots { display:inline-flex; gap:4px; }
   .dots i { width:7px; height:7px; border-radius:50%; background:var(--muted); display:block;
     animation:blink 1.3s infinite both; }
@@ -161,6 +182,8 @@
     <div class="sep"></div>
     <button id="mChips">⚡ <span>Hide quick actions</span></button>
     <div class="sep"></div>
+    <button id="mAddLecture">🎓 <span>Add lecture</span></button>
+    <div class="sep"></div>
     <button id="mInstall" class="hidden">📲 <span>Install app</span></button>
     <div class="sep hidden" id="mInstallSep"></div>
     <button id="mClear">🗑️ <span>Clear chat</span></button>
@@ -194,6 +217,26 @@
 <div id="deckOverlay" class="hidden">
   <button id="deckClose" aria-label="Close">✕</button>
   <iframe title="Study deck"></iframe>
+</div>
+
+<div id="lectureOverlay" class="hidden">
+  <div class="lec-card">
+    <h2>🎓 Add a lecture</h2>
+    <p class="lec-hint">In Panopto, open the captions/transcript panel, select all and copy, then paste below. Or attach a transcript file (or a recording to transcribe).</p>
+    <input id="lecTitle" type="text" placeholder="Title (optional) — e.g. BIOL 200 Lec 8" />
+    <textarea id="lecText" placeholder="Paste the lecture transcript here…"></textarea>
+    <div class="lec-row">
+      <label class="lec-file" id="lecFileLabel">📎 <span id="lecFileName">Attach transcript or recording</span>
+        <input id="lecFile" type="file" accept=".txt,.vtt,.srt,.pdf,.docx,audio/*,video/*" hidden />
+      </label>
+      <a class="lec-bm" href="/lectures/bookmarklet" target="_blank" rel="noopener">⚡ one-click bookmarklet</a>
+    </div>
+    <div id="lecStatus" class="lec-status"></div>
+    <div class="lec-actions">
+      <button id="lecCancel" class="lec-ghost">Cancel</button>
+      <button id="lecSave" class="lec-primary">Save lecture</button>
+    </div>
+  </div>
 </div>
 
 <div id="gate">
@@ -609,6 +652,75 @@ document.addEventListener('visibilitychange', async ()=>{
     _hiddenAt = 0; try { await freshOpenChat(); log.innerHTML=''; lastId=0; await loadHistory(); } catch(e){}
   }
 });
+// ---- Add lecture (paste/upload a transcript or recording) ----
+const lecOverlay = document.getElementById('lectureOverlay');
+const lecTitle = document.getElementById('lecTitle');
+const lecText = document.getElementById('lecText');
+const lecFileEl = document.getElementById('lecFile');
+const lecFileName = document.getElementById('lecFileName');
+const lecStatus = document.getElementById('lecStatus');
+const lecSaveBtn = document.getElementById('lecSave');
+let lecPending = null;  // {name, content_type, data}
+function lecSetStatus(msg, err){ lecStatus.textContent = msg || ''; lecStatus.classList.toggle('err', !!err); }
+function openLecture(){ lecOverlay.classList.remove('hidden'); lecSetStatus(''); }
+function closeLecture(){ lecOverlay.classList.add('hidden'); }
+function isAVfile(f){ return /^(audio|video)\//.test(f.type) || /\.(mp3|m4a|mp4|wav|webm|ogg|oga|mpeg|mpga|mov|flac|aac)$/i.test(f.name); }
+document.getElementById('mAddLecture').addEventListener('click', ()=>{ closeMenu(); openLecture(); });
+document.getElementById('lecCancel').addEventListener('click', closeLecture);
+lecOverlay.addEventListener('click', e=>{ if (e.target === lecOverlay) closeLecture(); });
+document.getElementById('lecFileLabel').addEventListener('click', ()=> lecFileEl.click());
+lecFileEl.addEventListener('change', ()=>{
+  const f = lecFileEl.files[0];
+  if (!f){ lecPending = null; lecFileName.textContent = 'Attach transcript or recording'; return; }
+  const av = isAVfile(f), cap = av ? 25 : 12;
+  if (f.size > cap*1024*1024){ lecSetStatus(`${f.name} is too big (max ${cap}MB)`, true); lecFileEl.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = ()=>{ const r = reader.result || '', i = r.indexOf(',');
+    lecPending = { name:f.name, content_type:f.type||'', data: i>=0 ? r.slice(i+1) : r };
+    lecFileName.textContent = f.name;
+    lecSetStatus(av ? "recording attached — i'll transcribe it on save." : ''); };
+  reader.readAsDataURL(f);
+});
+async function postLecture(title, text, attachments){
+  const r = await api('/lectures', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ title: title||'', text: text||'', attachments: attachments||[] }) });
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(d.error || "couldn't save that lecture.");
+  return d;
+}
+lecSaveBtn.addEventListener('click', async ()=>{
+  const title = lecTitle.value.trim(), text = lecText.value.trim();
+  if (!text && !lecPending){ lecSetStatus('paste the transcript or attach a file first.', true); return; }
+  lecSaveBtn.disabled = true;
+  lecSetStatus(lecPending && /^(audio|video)\//.test(lecPending.content_type) ? 'transcribing… this can take a minute.' : 'saving…');
+  try {
+    const d = await postLecture(title, text, lecPending ? [lecPending] : []);
+    closeLecture();
+    lecTitle.value=''; lecText.value=''; lecFileEl.value=''; lecPending=null;
+    lecFileName.textContent='Attach transcript or recording';
+    toast('Lecture saved ✓');
+    addBubble('assistant', `saved "${d.title}" 📚 — ask me anything about it, or say "make flashcards from that lecture".`, '');
+  } catch(e){ lecSetStatus(e.message, true); }
+  finally { lecSaveBtn.disabled = false; }
+});
+// ---- one-click bookmarklet bridge (transcript pushed from a Panopto page) ----
+window.addEventListener('message', async (e)=>{
+  let host = '';
+  try { host = new URL(e.origin).hostname; } catch(_){ return; }
+  if (!/(^|\.)panopto\.com$/i.test(host)) return;            // only trust Panopto
+  const m = e.data;
+  if (!m || m.type !== 'dubly-lecture' || !m.transcript) return;
+  if (window.__lecSaving) return; window.__lecSaving = true;
+  try {
+    const d = await postLecture(m.title || 'Lecture', m.transcript, []);
+    toast('Lecture saved ✓');
+    setTimeout(()=> addBubble('assistant', `saved "${d.title}" 📚 from Panopto — ask me anything about it, or say "make flashcards from that lecture".`, ''), 1500);
+  } catch(err){ toast("Couldn't save that lecture"); }
+  finally { window.__lecSaving = false; }
+});
+// If the bookmarklet opened this window, tell it we're ready to receive.
+try { if (window.opener && /[?&]addlecture=1/.test(location.search)) window.opener.postMessage({ type:'dubly-ready' }, '*'); } catch(_){}
+
 // Always try to start: in demo mode the server is open (no passcode) so it just
 // loads; in passcode mode the first request 401s and start() shows the gate.
 start();

@@ -191,7 +191,7 @@ def test_webclient_send_triggers_push(tmp_path):
     chats.ensure_chat()
     push = FakePush(PushStore(tmp_path / "p.sqlite"))
     WebClient(chats, push=push).send("you have a final tomorrow")
-    assert push.notes and push.notes[0][0] == "Study Assistant"
+    assert push.notes and push.notes[0][0] == "Dubly"
     assert "final tomorrow" in push.notes[0][1]
 
 

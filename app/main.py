@@ -70,6 +70,8 @@ class AppDeps:
     study_service: Any = None # StudyService — regenerates a quiz/deck on demand
     chats: Any = None         # ChatStore — multiple conversations (web app)
     study_progress: Any = None # StudyProgressStore — flashcard SR + quiz attempts
+    lectures: Any = None      # LectureStore — saved Panopto lecture transcripts
+    transcriber: Any = None   # Transcriber — Whisper transcription of recordings
 
 
 def _filename_for(content_type: str, index: int = 0) -> str:
@@ -238,6 +240,53 @@ class CancelIn(BaseModel):
     gen_id: str = ""
 
 
+class LectureIn(BaseModel):
+    title: str = ""
+    text: str = ""  # pasted transcript
+    attachments: list[ChatAttachment] = []  # transcript file(s) and/or a recording
+
+
+_AV_EXTS = {"mp3", "m4a", "mp4", "wav", "webm", "ogg", "oga", "mpeg", "mpga", "mov", "flac", "aac"}
+
+
+def _is_av(name: str, content_type: str) -> bool:
+    """True for audio/video that needs transcription (vs. a text transcript)."""
+    ct = (content_type or "").lower()
+    if ct.startswith("audio/") or ct.startswith("video/"):
+        return True
+    ext = (name or "").rsplit(".", 1)[-1].lower() if "." in (name or "") else ""
+    return ext in _AV_EXTS
+
+
+# Setup page for the one-click "Add to Dubly" bookmarklet. The bookmarklet runs
+# ON the Panopto page, fetches the official caption transcript (same-origin, using
+# the student's login), opens Dubly, and postMessages the transcript across. The
+# Dubly origin is injected client-side via location.origin (replaces __DUBLY__).
+_BOOKMARKLET_PAGE = r'''<!doctype html><html><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Add to Dubly — bookmarklet</title>
+<style>body{font-family:ui-sans-serif,system-ui,Arial;background:#efe9fb;color:#2a2342;margin:0;padding:32px;line-height:1.6}
+.card{max-width:560px;margin:0 auto;background:#fff;border-radius:18px;padding:28px;box-shadow:0 10px 40px rgba(80,50,140,.15)}
+h1{margin:0 0 6px}.bm{display:inline-block;background:linear-gradient(180deg,#7a5fc4,#9279d6);color:#fff;
+text-decoration:none;font-weight:700;padding:12px 20px;border-radius:12px;margin:14px 0;cursor:grab}
+ol{padding-left:20px}b{color:#5b3aa0}</style></head>
+<body><div class="card">
+<h1>🎓 Add to Dubly</h1>
+<p>One click to send a UW Panopto lecture's transcript straight to Dubly.</p>
+<p><b>Set up once:</b> drag this button up to your bookmarks bar:</p>
+<p><a class="bm" id="bm" href="#">📚 Add to Dubly</a></p>
+<p><b>Then, on any lecture:</b></p>
+<ol><li>Open the lecture in Panopto (the viewer page).</li>
+<li>Click the <b>Add to Dubly</b> bookmark.</li>
+<li>It grabs the transcript and saves it to Dubly for you.</li></ol>
+<p style="color:#6b6385;font-size:14px">No captions on a video? Use Dubly's <b>⋯ → Add lecture</b> and paste the transcript instead.</p>
+</div>
+<script>
+var BM="javascript:(function(){var D='__DUBLY__';var m=location.href.match(/[?&]id=([0-9a-fA-F-]{20,})/);if(!m){alert('Open a Panopto lecture (the viewer page) first, then click this.');return;}fetch('/Panopto/Pages/Transcription/GenerateSRT.ashx?id='+m[1]+'&language=0',{credentials:'include'}).then(function(r){return r.text();}).then(function(s){var t=s.split(/\\r?\\n/).filter(function(l){l=l.trim();return l&&!/^\\d+$/.test(l)&&l.indexOf('-->')<0;}).join(' ').replace(/\\s+/g,' ').trim();if(!t){alert('No captions found for this lecture. Use Add lecture in Dubly and paste the transcript.');return;}var ti=(document.title||'Lecture').replace(/\\s*[-|].*$/,'').trim()||'Lecture';var w=window.open(D+'/chat?addlecture=1','dubly');var sent=false,iv;function go(){if(sent||!w)return;try{w.postMessage({type:'dubly-lecture',title:ti,transcript:t},D);sent=true;if(iv)clearInterval(iv);}catch(e){}}window.addEventListener('message',function(e){if(e.origin===D&&e.data&&e.data.type==='dubly-ready')go();});var n=0;iv=setInterval(function(){n++;if(n>20){clearInterval(iv);return;}go();},500);}).catch(function(){alert('Could not fetch the transcript. Make sure the lecture has captions, or paste it via Add lecture.');});})();";
+document.getElementById('bm').setAttribute('href', BM.replace('__DUBLY__', location.origin));
+</script></body></html>'''
+
+
 class RenameIn(BaseModel):
     title: str = ""
 
@@ -255,7 +304,8 @@ _CLEAR_CMDS = {"clear", "clear chat", "clear all", "clear everything", "reset"}
 
 GREETING = (
     "hey 🐾 i'm Dubly, your husky study buddy. ask me what's due, your grades, the syllabus, "
-    "anything canvas, or i can build you a study guide, quiz, or essay blueprint to get you started."
+    "anything canvas, or i can build you a study guide, quiz, or essay blueprint. you can also "
+    "add a lecture (⋯ menu) and i'll answer questions or make flashcards from it."
 )
 
 
@@ -294,7 +344,8 @@ def _greeting_text(deps: AppDeps) -> str:
         f"{hello} i'm Dubly. here are the classes i see you're enrolled in this quarter:\n"
         f"{lines}\n\n"
         "ask me what's due, your grades, the syllabus, anything canvas, "
-        "or i can build you a study guide, quiz, or essay blueprint to get you started."
+        "or i can build you a study guide, quiz, or essay blueprint. you can also add a "
+        "lecture (⋯ menu) and i'll answer questions or make flashcards from it."
     )
 
 
@@ -595,6 +646,8 @@ def build_app(deps: AppDeps) -> FastAPI:
                     deps.reminders.clear_all()
                 if deps.study is not None:
                     deps.study.clear()
+                if deps.lectures is not None:
+                    deps.lectures.clear()
             _ensure_greeting(deps, cid)
             return {"chat_id": cid, "messages": deps.chats.since(cid, 0), "cleared": True}
         # Brain memory = this chat's prior messages (captured before this turn).
@@ -629,6 +682,65 @@ def build_app(deps: AppDeps) -> FastAPI:
             deps.cancels.add(gid)
         return {"ok": True}
 
+    @app.get("/lectures/bookmarklet", response_class=HTMLResponse)
+    def lecture_bookmarklet():
+        return _BOOKMARKLET_PAGE
+
+    @app.post("/lectures")
+    def add_lecture(payload: LectureIn, x_chat_key: str = Header(default="")):
+        if not _web_authed(deps, x_chat_key):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        if deps.lectures is None:
+            return JSONResponse({"error": "lectures aren't available here"}, status_code=503)
+        import uuid
+        from datetime import datetime, timezone
+        from app.attachments import extract_text
+        from app.transcribe import TranscribeError
+
+        title = (payload.title or "").strip() or "Untitled lecture"
+        parts: list[str] = []
+        if (payload.text or "").strip():
+            parts.append(payload.text.strip())
+        source = "transcript"
+        for a in payload.attachments or []:
+            try:
+                raw = base64.b64decode(a.data or "")
+            except Exception:
+                continue
+            if not raw:
+                continue
+            if _is_av(a.name, a.content_type):
+                if deps.transcriber is None or not getattr(deps.transcriber, "enabled", False):
+                    return JSONResponse(
+                        {"error": "audio transcription isn't set up here — paste or upload "
+                                  "the lecture transcript/captions instead."},
+                        status_code=400,
+                    )
+                try:
+                    text = deps.transcriber.transcribe(a.name or "lecture", raw)
+                except TranscribeError as exc:
+                    return JSONResponse({"error": str(exc)}, status_code=400)
+                source = "recording"
+                if text:
+                    parts.append(text)
+            else:
+                text = extract_text(a.name or "file", a.content_type or "", raw)
+                if text:
+                    parts.append(text)
+        transcript = "\n\n".join(p for p in parts if p).strip()
+        if not transcript:
+            return JSONResponse(
+                {"error": "couldn't read any transcript — paste the text or attach a "
+                          ".txt/.vtt/.srt/.pdf/.docx (or a recording)."},
+                status_code=400,
+            )
+        lid = uuid.uuid4().hex
+        deps.lectures.save(
+            lid, title, transcript, source,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        return {"id": lid, "title": title, "chars": len(transcript), "source": source}
+
     return app
 
 
@@ -647,7 +759,9 @@ def create_app() -> FastAPI:
         PushStore,
         AlertStore,
         StudyProgressStore,
+        LectureStore,
     )
+    from app.transcribe import Transcriber
     from app.alerts import AlertService
     from app.reminders import ReminderService
     from app.study import StudyService
@@ -669,6 +783,8 @@ def create_app() -> FastAPI:
         canvas = CanvasClient(settings.canvas_base_url, settings.canvas_token)
     conversation = ConversationStore(settings.data_dir / "conversation.sqlite")
     study_store = StudyPageStore(settings.data_dir / "study.sqlite")
+    lecture_store = LectureStore(settings.data_dir / "lectures.sqlite")
+    transcriber = Transcriber(api_key=settings.openai_api_key)
     file_store = FileStore(settings.data_dir / "files.sqlite")
     chat_store = ChatStore(settings.data_dir / "chats.sqlite")
     push_store = PushStore(settings.data_dir / "push.sqlite")
@@ -726,6 +842,7 @@ def create_app() -> FastAPI:
         model=settings.anthropic_model,
         pages=study_store,
         public_base_url=settings.public_base_url,
+        lectures=lecture_store,
     )
 
     documents = DocumentService(
@@ -734,7 +851,7 @@ def create_app() -> FastAPI:
         public_base_url=settings.public_base_url,
         onedrive=onedrive,
     )
-    toolbox = ToolBox(canvas=canvas, reminders=reminders, study=study, documents=documents)
+    toolbox = ToolBox(canvas=canvas, reminders=reminders, study=study, documents=documents, lectures=lecture_store)
     # Personalize: greet the student by name instead of a generic "Dawg".
     try:
         _full = canvas.get_user_name()
@@ -775,5 +892,7 @@ def create_app() -> FastAPI:
         study_service=study,
         chats=chat_store,
         study_progress=StudyProgressStore(settings.data_dir / "study_progress.sqlite"),
+        lectures=lecture_store,
+        transcriber=transcriber,
     )
     return build_app(deps)

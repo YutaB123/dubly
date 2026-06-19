@@ -100,6 +100,12 @@ they need (and say if it's already locked in or out of reach).
 (get_calendar / announcements), then lay out a realistic day-by-day plan around those real \
 dates. Offer to make_document it if they want a copy to keep.
 - To set a reminder, first find the real due date from Canvas, then schedule it.
+- The student can save LECTURES (their UW Panopto lectures). For any question about \
+"my lecture"/"the lecture"/lecture content, call list_lectures then get_lecture to answer \
+from the transcript. To make a deck or quiz FROM a lecture, call make_flashcards / \
+make_practice_exam with that lecture's lecture_id (not a course). If they want to study a \
+lecture but none is saved, tell them to tap the menu (⋯) -> 'Add lecture' and paste the \
+Panopto transcript (or upload the recording).
 - If something's still genuinely unclear after checking everything, ask a quick follow-up.
 """
 

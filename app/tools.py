@@ -231,6 +231,36 @@ CANVAS_TOOLS: list[dict[str, Any]] = [
 ]
 
 
+# One saved lecture fits Claude's context, so these return the whole transcript.
+_LECTURE_MAX = 40000
+
+LECTURE_TOOLS: list[dict[str, Any]] = [
+    {
+        "name": "list_lectures",
+        "description": "List the lectures the student has saved (id + title). Use this "
+        "when they mention 'my lecture', 'the lecture I added', or want to study from a "
+        "lecture but didn't say which. If none are saved, tell them to tap the menu (⋯) "
+        "-> 'Add lecture' and paste the Panopto transcript (or upload the recording).",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "get_lecture",
+        "description": "Get a saved lecture's full transcript to answer a question about "
+        "it. Accepts the lecture id from list_lectures, or a loose title like 'bio lecture'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "id_or_title": {
+                    "type": "string",
+                    "description": "Lecture id (from list_lectures) or a fuzzy title.",
+                }
+            },
+            "required": ["id_or_title"],
+        },
+    },
+]
+
+
 class ToolBox:
     def __init__(
         self,
@@ -238,12 +268,14 @@ class ToolBox:
         reminders=None,
         study=None,
         documents=None,
+        lectures=None,
         now: Callable[[], datetime] | None = None,
     ):
         self.canvas = canvas
         self.reminders = reminders
         self.study = study
         self.documents = documents
+        self.lectures = lectures
         self._now = now or (lambda: datetime.now(timezone.utc))
 
     # --- schema assembly -----------------------------------------------------
@@ -256,6 +288,8 @@ class ToolBox:
             schemas += self.study.schemas()
         if self.documents is not None:
             schemas += self.documents.schemas()
+        if self.lectures is not None:
+            schemas += LECTURE_TOOLS
         return schemas
 
     # --- dispatch ------------------------------------------------------------
@@ -275,6 +309,8 @@ class ToolBox:
             "get_course_grades": self._get_course_grades,
             "get_grade_breakdown": self._get_grade_breakdown,
             "get_submission": self._get_submission,
+            "list_lectures": self._list_lectures,
+            "get_lecture": self._get_lecture,
         }.get(name)
 
         if handler is None:
@@ -469,3 +505,27 @@ class ToolBox:
             body = body[:1500] + "…"
         course = f"[{m.course}] " if m.course else ""
         return f"{course}{m.subject} ({when})\n{body}"
+
+    # --- Lecture handlers ----------------------------------------------------
+
+    def _list_lectures(self, _: dict) -> str:
+        items = self.lectures.list() if self.lectures is not None else []
+        if not items:
+            return ("No lectures saved yet. Tell the student to tap the menu (⋯) -> "
+                    "'Add lecture' and paste the Panopto transcript (or upload the recording).")
+        return "\n".join(f"[{it['id']}] {it['title']}" for it in items)
+
+    def _get_lecture(self, tool_input: dict) -> str:
+        key = (tool_input.get("id_or_title") or "").strip()
+        if not key or self.lectures is None:
+            return "No lecture specified. Use list_lectures to see saved lectures."
+        hit = self.lectures.get(key)
+        if hit:
+            title, transcript = hit
+        else:
+            found = self.lectures.find_by_title(key)
+            if not found:
+                return f"No saved lecture matching '{key}'. Use list_lectures to see what's saved."
+            _id, title, transcript = found
+        text = transcript if len(transcript) <= _LECTURE_MAX else transcript[:_LECTURE_MAX] + "…"
+        return f"Lecture: {title}\n\n{text}"

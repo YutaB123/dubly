@@ -20,6 +20,8 @@ load_dotenv()
 class Settings:
     # Claude
     anthropic_api_key: str
+    # OpenAI — optional, only for Whisper transcription of uploaded lecture recordings
+    openai_api_key: str
     anthropic_model: str   # used for study-page generation (flashcards / exams)
     brain_model: str       # used for the conversational brain — kept fast for snappy texts
 
@@ -90,6 +92,7 @@ def load_settings(require_secrets: bool = True) -> Settings:
 
     return Settings(
         anthropic_api_key=secret("ANTHROPIC_API_KEY"),
+        openai_api_key=os.environ.get("OPENAI_API_KEY", ""),
         anthropic_model=os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
         brain_model=os.environ.get("BRAIN_MODEL", "claude-sonnet-4-6"),
         canvas_base_url=os.environ.get(
