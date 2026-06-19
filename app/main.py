@@ -240,6 +240,12 @@ class CancelIn(BaseModel):
     gen_id: str = ""
 
 
+class TranscribeIn(BaseModel):
+    audio: str = ""           # base64-encoded recorded clip
+    content_type: str = ""    # e.g. audio/webm
+    name: str = "speech.webm"
+
+
 class LectureIn(BaseModel):
     title: str = ""
     text: str = ""  # pasted transcript
@@ -681,6 +687,27 @@ def build_app(deps: AppDeps) -> FastAPI:
         if gid:
             deps.cancels.add(gid)
         return {"ok": True}
+
+    @app.post("/chat/transcribe")
+    def chat_transcribe(payload: TranscribeIn, x_chat_key: str = Header(default="")):
+        """Voice input: transcribe a short recorded clip with Whisper. More
+        reliable than the Web Speech API (which doesn't work on iOS)."""
+        if not _web_authed(deps, x_chat_key):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        if deps.transcriber is None or not getattr(deps.transcriber, "enabled", False):
+            return JSONResponse({"error": "voice input isn't set up here"}, status_code=400)
+        from app.transcribe import TranscribeError
+        try:
+            raw = base64.b64decode(payload.audio or "")
+        except Exception:
+            raw = b""
+        if not raw:
+            return JSONResponse({"error": "no audio captured"}, status_code=400)
+        try:
+            text = deps.transcriber.transcribe(payload.name or "speech.webm", raw)
+        except TranscribeError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        return {"text": text}
 
     @app.get("/lectures/bookmarklet", response_class=HTMLResponse)
     def lecture_bookmarklet():

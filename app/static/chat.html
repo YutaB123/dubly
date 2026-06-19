@@ -570,28 +570,56 @@ document.getElementById('mNotify').addEventListener('click', async ()=>{ closeMe
   refreshNotifyLabel();
 });
 
-// ---- voice input (Web Speech API) ----
+// ---- voice input: record a clip, transcribe with Whisper (works on iOS too,
+// unlike the Web Speech API). Tap to start, tap again to stop. ----
 (function(){
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const micBtn = document.getElementById('mic');
-  if (!SR){ micBtn.classList.add('hidden'); return; }   // not supported (e.g. some iOS)
-  const recog = new SR();
-  recog.lang = navigator.language || 'en-US';
-  recog.interimResults = true; recog.continuous = false;
-  let listening = false, base = '';
-  recog.onstart = ()=>{ listening = true; micBtn.classList.add('listening'); };
-  recog.onend   = ()=>{ listening = false; micBtn.classList.remove('listening'); };
-  recog.onerror = ()=>{ listening = false; micBtn.classList.remove('listening'); };
-  recog.onresult = (e)=>{
-    let txt = '';
-    for (let i=e.resultIndex; i<e.results.length; i++){ txt += e.results[i][0].transcript; }
-    ta.value = (base + txt).trim();
-    ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,120)+'px';
-  };
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder){
+    micBtn.classList.add('hidden'); return;
+  }
+  let rec=null, chunks=[], recording=false, maxTimer=null;
+  function pickType(){
+    for (const t of ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/aac']){
+      try { if (MediaRecorder.isTypeSupported(t)) return t; } catch(e){}
+    }
+    return '';
+  }
+  function blobToB64(blob){ return new Promise(res=>{ const fr=new FileReader();
+    fr.onload=()=>{ const r=fr.result||'', i=r.indexOf(','); res(i>=0?r.slice(i+1):r); };
+    fr.readAsDataURL(blob); }); }
+  async function startRec(){
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({audio:true}); }
+    catch(e){ toast('allow microphone access to use voice'); return; }
+    const mt = pickType(); chunks = [];
+    try { rec = mt ? new MediaRecorder(stream,{mimeType:mt}) : new MediaRecorder(stream); }
+    catch(e){ try { rec = new MediaRecorder(stream); } catch(_){ stream.getTracks().forEach(t=>t.stop()); toast('voice not supported here'); return; } }
+    rec.ondataavailable = e=>{ if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = async ()=>{
+      clearTimeout(maxTimer); recording=false; micBtn.classList.remove('listening');
+      stream.getTracks().forEach(t=>t.stop());
+      const type = rec.mimeType || mt || 'audio/webm';
+      const blob = new Blob(chunks, {type});
+      if (!blob.size) return;
+      const ext = type.includes('webm') ? 'webm' : (type.includes('mp4') ? 'mp4' : 'm4a');
+      toast('transcribing…');
+      try {
+        const b64 = await blobToB64(blob);
+        const r = await api('/chat/transcribe', {method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ audio:b64, content_type:type, name:'speech.'+ext })});
+        const d = await r.json().catch(()=>({}));
+        if (!r.ok){ toast(d.error || "couldn't transcribe that"); return; }
+        const txt = (d.text||'').trim();
+        if (txt){ ta.value = (ta.value ? ta.value.trim()+' ' : '') + txt; ta.dispatchEvent(new Event('input')); ta.focus(); }
+        else toast("didn't catch that — try again");
+      } catch(e){ toast("couldn't transcribe that"); }
+    };
+    try { rec.start(); } catch(e){ stream.getTracks().forEach(t=>t.stop()); toast('could not start recording'); return; }
+    recording = true; micBtn.classList.add('listening');
+    maxTimer = setTimeout(()=>{ if (recording){ try { rec.stop(); } catch(e){} } }, 60000); // 60s cap
+  }
   micBtn.addEventListener('click', ()=>{
-    if (listening){ recog.stop(); return; }
-    base = ta.value ? ta.value + ' ' : '';
-    try { recog.start(); } catch(e){}
+    if (recording){ try { rec.stop(); } catch(e){} } else { startRec(); }
   });
 })();
 
