@@ -587,10 +587,27 @@ document.getElementById('mNotify').addEventListener('click', async ()=>{ closeMe
   function blobToB64(blob){ return new Promise(res=>{ const fr=new FileReader();
     fr.onload=()=>{ const r=fr.result||'', i=r.indexOf(','); res(i>=0?r.slice(i+1):r); };
     fr.readAsDataURL(blob); }); }
+  const standalone = (window.navigator.standalone === true) ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
   async function startRec(){
+    if (!window.isSecureContext){ toast('voice needs a secure (https) connection'); return; }
     let stream;
     try { stream = await navigator.mediaDevices.getUserMedia({audio:true}); }
-    catch(e){ toast('allow microphone access to use voice'); return; }
+    catch(e){
+      const n = (e && e.name) || '';
+      if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError'){
+        toast(standalone
+          ? "mic blocked in the home-screen app — open Dubly in Safari/Chrome and allow the mic"
+          : "mic is blocked — tap the 'AA' or lock icon by the address bar → Microphone → Allow, then retry");
+      } else if (n === 'NotFoundError' || n === 'DevicesNotFoundError'){
+        toast('no microphone found on this device');
+      } else if (n === 'NotReadableError' || n === 'TrackStartError'){
+        toast('mic is busy — close other apps using it and retry');
+      } else {
+        toast('mic error: ' + (n || 'unknown') + ' — tap to retry');
+      }
+      return;
+    }
     const mt = pickType(); chunks = [];
     try { rec = mt ? new MediaRecorder(stream,{mimeType:mt}) : new MediaRecorder(stream); }
     catch(e){ try { rec = new MediaRecorder(stream); } catch(_){ stream.getTracks().forEach(t=>t.stop()); toast('voice not supported here'); return; } }
