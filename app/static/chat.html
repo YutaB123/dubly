@@ -583,18 +583,39 @@ document.getElementById('mNotify').addEventListener('click', async ()=>{ closeMe
   // ---------- live path: interim results stream in as you talk ----------
   if (SR && !isIOS){
     let recog=null, listening=false, base='';
+    // Glue a new chunk onto what we already have WITHOUT repeating any overlap.
+    // Some engines (notably Android Chrome) emit the growing phrase as several
+    // results — "what", "what is", "what is due" — and a blind concat turns that
+    // into "whatwhat iswhat is due". Merging by overlap makes a repeat impossible.
+    function merge(acc, next){
+      acc = (acc||'').trim(); next = (next||'').trim();
+      if (!next) return acc;
+      if (!acc) return next;
+      const a = acc.toLowerCase(), n = next.toLowerCase();
+      if (n.startsWith(a)) return next;   // next is a superset (the phrase grew)
+      if (a.endsWith(n)) return acc;      // next already sits at the tail
+      const max = Math.min(a.length, n.length);
+      for (let k=max; k>0; k--){
+        if (a.slice(a.length-k) === n.slice(0,k)) return acc + next.slice(k);
+      }
+      return acc + ' ' + next;
+    }
     function start(){
       recog = new SR();
       recog.lang = 'en-US'; recog.continuous = true; recog.interimResults = true;
       base = ta.value ? ta.value.replace(/\s+$/,'') + ' ' : '';
       recog.onresult = (e)=>{
-        // Rebuild from the FULL results list every event. Android Chrome
-        // re-sends the whole growing phrase each time, so accumulating would
-        // duplicate it ("whenwhen iswhen is the…"); reading 0..length is stable
-        // on both Android (one growing result) and desktop (results accrue).
-        let full = '';
-        for (let i=0; i<e.results.length; i++) full += e.results[i][0].transcript;
-        ta.value = (base + full.replace(/\s+/g,' ').trim()).trimStart();
+        // Build finalized text by overlap-merging each final result, then merge
+        // the current interim phrase on top — so duplicated/cumulative results
+        // collapse instead of stacking up.
+        let finals = '', interim = '';
+        for (let i=0; i<e.results.length; i++){
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) finals = merge(finals, t);
+          else interim = merge(interim, t);
+        }
+        const out = merge(finals, interim);
+        ta.value = (base + out).replace(/\s+/g,' ').trimStart();
         ta.dispatchEvent(new Event('input'));
       };
       recog.onerror = (e)=>{
