@@ -587,14 +587,14 @@ document.getElementById('mNotify').addEventListener('click', async ()=>{ closeMe
       recog = new SR();
       recog.lang = 'en-US'; recog.continuous = true; recog.interimResults = true;
       base = ta.value ? ta.value.replace(/\s+$/,'') + ' ' : '';
-      let finalTxt = '';
       recog.onresult = (e)=>{
-        let interim = '';
-        for (let i=e.resultIndex; i<e.results.length; i++){
-          const t = e.results[i][0].transcript;
-          if (e.results[i].isFinal) finalTxt += t; else interim += t;
-        }
-        ta.value = base + finalTxt + interim;
+        // Rebuild from the FULL results list every event. Android Chrome
+        // re-sends the whole growing phrase each time, so accumulating would
+        // duplicate it ("whenwhen iswhen is the…"); reading 0..length is stable
+        // on both Android (one growing result) and desktop (results accrue).
+        let full = '';
+        for (let i=0; i<e.results.length; i++) full += e.results[i][0].transcript;
+        ta.value = (base + full.replace(/\s+/g,' ').trim()).trimStart();
         ta.dispatchEvent(new Event('input'));
       };
       recog.onerror = (e)=>{
