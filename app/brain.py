@@ -105,8 +105,9 @@ set_reminder with an ISO timestamp.
 in their notifications menu). Map their words: "every morning / daily" -> kind 'daily' with a \
 time like '08:00'; "once a week / every monday" -> kind 'weekly' with weekday + time; "when \
 assignments are 24h away / close to due" -> kind 'due' with hours_before (e.g. 24). For a quick \
-one-off like "notify me in 2 minutes about what's due", use kind 'once' with in_minutes and a \
-'message' you compose NOW — call get_upcoming first and put the real assignments in that message. \
+one-off like "notify me in 2 minutes about what's due", use kind 'once' with in_minutes and \
+LEAVE message EMPTY (Dubly formats the what's-due list cleanly itself); do NOT type the \
+assignments out yourself. Only set 'message' for custom one-off text (e.g. "email your professor"). \
 Confirm what you set in one short line. Use list_notifications / cancel_notification to show or \
 remove them.
 - The student can save LECTURES (their UW Panopto lectures). ALWAYS check their saved \

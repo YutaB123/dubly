@@ -139,12 +139,28 @@ def test_dispatch_schedule_and_list_and_cancel(tmp_path):
     assert svc.dispatch("list_notifications", {}).lower().startswith("no notifications")
 
 
-def test_dispatch_once_needs_message(tmp_path):
-    svc, _, _, _ = make_service(tmp_path)
+def test_dispatch_once_empty_message_uses_digest(tmp_path):
+    items = [_item("CSE 142", "Quiz 4", 10)]
+    svc, _, _, _ = make_service(tmp_path, items)
+    # no message -> server builds the clean what's-due digest, still schedules
     out = svc.dispatch("schedule_notification", {"kind": "once", "in_minutes": 2})
-    assert "need a message" in out.lower()
-    ok = svc.dispatch("schedule_notification", {"kind": "once", "in_minutes": 2, "message": "due soon"})
-    assert "2 min" in ok
+    assert "2 min" in out
+    jobs = svc.scheduler.get_jobs()
+    assert len(jobs) == 1
+    assert "Quiz 4" in jobs[0].args[0]      # the digest, not a run-on the model wrote
+
+
+def test_digest_is_grouped_and_multiline(tmp_path):
+    items = [
+        _item("MATH 126", "WebAssign 6", 20),
+        _item("PSYCH 101", "Reading Quiz 6", 20),   # same due time -> same group
+        _item("CSE 142", "Assignment 5", 44),       # later -> its own group
+    ]
+    svc, _, _, _ = make_service(tmp_path, items)
+    digest = svc._due_digest(7)
+    assert digest.startswith("📋 what's due:")
+    assert "• MATH 126 - WebAssign 6" in digest
+    assert digest.count("\n") >= 5                  # genuinely multi-line, not a run-on
 
 
 def test_tool_names_match_schemas(tmp_path):

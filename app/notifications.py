@@ -85,8 +85,9 @@ SCHEDULE_TOOLS = [
             "- 'due': notify a set number of hours before EACH assignment is due. Give "
             "'hours_before' (e.g. 24 for 'when assignments are 24h away').\n"
             "- 'once': a single reminder a relative time from now. Give 'in_minutes' "
-            "(e.g. 2 for 'in 2 minutes') and the exact 'message' to send — compose it "
-            "yourself, e.g. pull get_upcoming first and put the real assignments in it.\n"
+            "(e.g. 2 for 'in 2 minutes'). If it's a 'what's due' reminder, LEAVE 'message' "
+            "EMPTY so Dubly sends a clean formatted list — do NOT type the assignments out "
+            "yourself. Only set 'message' for genuinely custom text (e.g. 'email your professor').\n"
             "These show up in the student's notifications menu (except 'once')."
         ),
         "input_schema": {
@@ -161,9 +162,25 @@ class NotificationService:
             items = []
         if not items:
             return "nothing due " + ("today" if days <= 2 else "this week") + " 🎉"
-        header = "📚 due soon:" if days <= 2 else "📚 due this week:"
-        lines = [f"• {it.course} - {it.title} ({human_due(it.due_at)})" for it in items[:8]]
-        return header + "\n" + "\n".join(lines)
+        # Group by when it's due so it reads as a short scannable list:
+        #   📋 what's due:
+        #   Sun 10am:
+        #   • MATH 126 - WebAssign 6
+        #   • PSYCH 101 - Reading Quiz 6
+        groups: dict[str, list[str]] = {}
+        order: list[str] = []
+        for it in items[:14]:
+            when = human_due(it.due_at)
+            if when not in groups:
+                groups[when] = []
+                order.append(when)
+            groups[when].append(f"• {it.course} - {it.title}")
+        lines = ["📋 what's due:"]
+        for when in order:
+            lines.append("")
+            lines.append(f"{when}:")
+            lines.extend(groups[when])
+        return "\n".join(lines)
 
     # --- scheduling a single rule's job --------------------------------------
 
@@ -288,9 +305,9 @@ class NotificationService:
         if name == "schedule_notification":
             kind = (tool_input.get("kind") or "").strip().lower()
             if kind == "once":
-                msg = (tool_input.get("message") or "").strip()
-                if not msg:
-                    return "(need a message for a one-off reminder)"
+                # No message -> send the clean, server-formatted "what's due"
+                # digest. Only use a custom message when one is given.
+                msg = (tool_input.get("message") or "").strip() or self._due_digest(7)
                 self.remind_once(tool_input.get("in_minutes", 1), msg)
                 mins = int(tool_input.get("in_minutes", 1) or 1)
                 return f"ok, i'll send that in {mins} min."
