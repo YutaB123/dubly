@@ -122,7 +122,7 @@ document.addEventListener('keydown', e=>{
 });
 function done(){
   document.getElementById('counter').textContent='';
-  document.getElementById('q').textContent='🎉'; document.getElementById('a').textContent='🎉';
+  document.getElementById('q').textContent='Done'; document.getElementById('a').textContent='';
   hintEl.textContent = 'deck complete - reviewed '+order.length+' cards. tap regenerate for a fresh set.';
   setRate(false);
 }
@@ -252,7 +252,7 @@ function render(){
   h += '</div><div class="explain" id="explain"></div>';
   main.innerHTML = h;
   main.querySelectorAll('.choice').forEach(b=> b.addEventListener('click', ()=> pick(parseInt(b.dataset.idx), q)));
-  nextBtn.textContent = (i === Q.length-1) ? 'Finish' : 'Next ▶';
+  nextBtn.textContent = (i === Q.length-1) ? 'Finish' : 'Next';
 }
 function pick(idx, q){
   if (answered) return; answered = true;
@@ -262,7 +262,7 @@ function pick(idx, q){
     else if (k === idx) b.classList.add('wrong'); });
   if (idx === correct) score++; else missedQ.push(q);
   const ex = document.getElementById('explain');
-  ex.textContent = (idx === correct ? '✓ correct. ' : '✗ not quite. ') + (q.explanation || '');
+  ex.textContent = (idx === correct ? 'correct. ' : 'not quite. ') + (q.explanation || '');
   ex.classList.add('show');
   bar.style.width = ((i+1)/Q.length*100)+'%';
   nextBtn.disabled = false;
@@ -278,8 +278,8 @@ async function done(){
   const pct = total ? Math.round(score/total*100) : 0;
   let html = '<div class="done"><div class="bigscore">'+score+' / '+total+'</div>'
     + '<div class="sub">you scored '+pct+'%</div>' + best;
-  if (miss.length) html += '<button class="ghost" id="review">🎯 review '+miss.length+' missed</button>';
-  html += '<button class="ghost" id="again">↺ try again</button></div>';
+  if (miss.length) html += '<button class="ghost" id="review">review '+miss.length+' missed</button>';
+  html += '<button class="ghost" id="again">try again</button></div>';
   main.innerHTML = html; nextBtn.disabled = true;
   const rv = document.getElementById('review');
   if (rv) rv.addEventListener('click', ()=>{ Q = miss; i=0; score=0; missedQ=[]; render(); });
@@ -331,10 +331,10 @@ function render(){
   main.innerHTML = '<div class="question">'+esc(q.q)+'</div>'
     + '<textarea id="ans" placeholder="type your answer..."></textarea>'
     + '<div class="model" id="model"><span class="lbl">model answer</span>'+esc(q.answer||'')+'</div>'
-    + '<div class="grade" id="grade"><button class="btn good" id="got">✓ I got it</button>'
-    + '<button class="btn bad" id="missed">✗ I missed it</button></div>';
+    + '<div class="grade" id="grade"><button class="btn good" id="got">I got it</button>'
+    + '<button class="btn bad" id="missed">I missed it</button></div>';
   document.getElementById('ans').focus();
-  nextBtn.textContent = (i === Q.length-1) ? 'Finish' : 'Next ▶';
+  nextBtn.textContent = (i === Q.length-1) ? 'Finish' : 'Next';
 }
 function reveal(){
   if (revealed) return; revealed = true;
@@ -357,8 +357,8 @@ async function done(){
   const pct = total ? Math.round(score/total*100) : 0;
   let html = '<div class="done"><div class="bigscore">'+score+' / '+total+'</div>'
     + '<div class="sub">you got '+pct+'% right</div>' + best;
-  if (miss.length) html += '<button class="ghost" id="review">🎯 review '+miss.length+' missed</button>';
-  html += '<button class="ghost" id="again">↺ try again</button></div>';
+  if (miss.length) html += '<button class="ghost" id="review">review '+miss.length+' missed</button>';
+  html += '<button class="ghost" id="again">try again</button></div>';
   main.innerHTML = html; nextBtn.disabled = true;
   const rv = document.getElementById('review');
   if (rv) rv.addEventListener('click', ()=>{ Q = miss; i=0; score=0; missedQ=[]; render(); });

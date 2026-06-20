@@ -140,7 +140,7 @@ def render_pptx(title: str, content: str) -> bytes:
     title_slide = prs.slides.add_slide(prs.slide_layouts[0])
     title_slide.shapes.title.text = title
     if len(title_slide.placeholders) > 1:
-        title_slide.placeholders[1].text = "made by Dubly 🐾"
+        title_slide.placeholders[1].text = "made by Dubly"
 
     sections = [s for s in content.split("\n\n") if s.strip()]
     if not sections:

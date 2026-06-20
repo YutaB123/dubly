@@ -147,7 +147,7 @@ class DemoCanvasClient(CanvasClient):
 
     # --- identity & courses ---
     def get_user_name(self) -> str:
-        return ""  # generic greeting ("hey 🐾"), no fake personal name
+        return ""  # generic greeting ("hey"), no fake personal name
 
     def list_courses(self) -> list[Course]:
         return list(_COURSES)

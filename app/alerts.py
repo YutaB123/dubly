@@ -35,7 +35,7 @@ class AlertService:
             if prev is None:
                 self.store.set_grade(g.course, g.score)  # baseline, stay quiet
             elif abs(g.score - prev) > 0.009:
-                self.push.notify("📊 New grade", f"{short_course_code(g.course)}: {g.score:g}%")
+                self.push.notify("New grade", f"{short_course_code(g.course)}: {g.score:g}%")
                 self.store.set_grade(g.course, g.score)
 
         # --- assignments due soon (next couple of days) ---
@@ -47,7 +47,7 @@ class AlertService:
             ref = getattr(it, "ref", "")
             if not ref or self.store.was_due_alerted(ref):
                 continue
-            self.push.notify("⏰ Due soon", f"{it.title} ({it.course})")
+            self.push.notify("Due soon", f"{it.title} ({it.course})")
             self.store.mark_due_alerted(ref)
 
     def _loop(self) -> None:

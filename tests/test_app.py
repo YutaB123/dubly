@@ -136,7 +136,7 @@ def test_typing_falls_back_to_text_when_unsupported(tmp_path):
         data={"Body": "hi", "From": "+12065559876", "MessageSid": "SMabc"},
     )
     # Native indicator refused → a quick "on it" text shows instead, plus the reply.
-    assert "on it 🤔" in sms.sent
+    assert "on it" in sms.sent
     assert "hw4 is due tue 11:59pm" in sms.sent
 
 

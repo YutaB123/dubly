@@ -213,32 +213,32 @@
     <button class="iconbtn" id="menuBtn" aria-label="Menu">⋯</button>
   </header>
   <div id="menu" class="hidden">
-    <button id="mNotify">🔔 <span>Enable notifications</span></button>
+    <button id="mNotify"><span>Enable notifications</span></button>
     <div class="sep"></div>
-    <button id="mDark">🌙 <span>Dark mode</span></button>
+    <button id="mDark"><span>Dark mode</span></button>
     <div class="sep"></div>
-    <button id="mChips">⚡ <span>Hide quick actions</span></button>
+    <button id="mChips"><span>Hide quick actions</span></button>
     <div class="sep"></div>
-    <button id="mAddLecture">🎓 <span>Add lecture</span></button>
+    <button id="mAddLecture"><span>Add lecture</span></button>
     <div class="sep"></div>
-    <button id="mNotifSchedule">⏰ <span>Reminders &amp; alerts</span></button>
+    <button id="mNotifSchedule"><span>Reminders &amp; alerts</span></button>
     <div class="sep"></div>
-    <button id="mInstall" class="hidden">📲 <span>Install app</span></button>
+    <button id="mInstall" class="hidden"><span>Install app</span></button>
     <div class="sep hidden" id="mInstallSep"></div>
-    <button id="mClear">🗑️ <span>Clear chat</span></button>
+    <button id="mClear"><span>Clear chat</span></button>
   </div>
   <div id="log"></div>
   <div id="chips" class="hidden">
-    <button data-msg="what's due this week?">📅 What's due?</button>
-    <button data-msg="how are my grades looking?">📊 My grades</button>
-    <button data-msg="help me build an essay blueprint to get started">📝 Essay blueprint</button>
-    <button data-msg="make me a study plan for this week based on what's actually due">🗓️ Study plan</button>
-    <button data-msg="what do I need on my finals to keep my grades up?">🎯 What do I need?</button>
+    <button data-msg="what's due this week?">What's due?</button>
+    <button data-msg="how are my grades looking?">My grades</button>
+    <button data-msg="help me build an essay blueprint to get started">Essay blueprint</button>
+    <button data-msg="make me a study plan for this week based on what's actually due">Study plan</button>
+    <button data-msg="what do I need on my finals to keep my grades up?">What do I need?</button>
   </div>
   <div id="previews" class="hidden"></div>
   <footer>
-    <button class="iconbtn" id="attach" aria-label="Attach a picture or document">📎</button>
-    <button class="iconbtn" id="mic" aria-label="Voice input">🎤</button>
+    <button class="iconbtn" id="attach" aria-label="Attach a picture or document"><svg class='ic' viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48'/></svg></button>
+    <button class="iconbtn" id="mic" aria-label="Voice input"><svg class='ic' viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='9' y='2' width='6' height='12' rx='3'/><path d='M5 10v2a7 7 0 0 0 14 0v-2'/><line x1='12' y1='19' x2='12' y2='22'/></svg></button>
     <input type="file" id="file" multiple hidden />
     <textarea id="text" rows="1" placeholder="Message" autocomplete="off"></textarea>
     <button id="send" aria-label="Send">↑</button>
@@ -249,7 +249,7 @@
 <aside id="drawer" class="hidden">
   <div class="drawer-head"><span>Chats</span>
     <button class="iconbtn" id="newChatBtn" aria-label="New chat">＋</button></div>
-  <input id="chatSearch" placeholder="🔍 Search chats…" autocomplete="off" />
+  <input id="chatSearch" placeholder="Search chats…" autocomplete="off" />
   <div id="chatList"></div>
 </aside>
 
@@ -260,15 +260,15 @@
 
 <div id="lectureOverlay" class="hidden">
   <div class="lec-card">
-    <h2>🎓 Add a lecture</h2>
+    <h2>Add a lecture</h2>
     <p class="lec-hint">In Panopto, open the captions/transcript panel, select all and copy, then paste below. Or attach a transcript file (or a recording to transcribe).</p>
     <input id="lecTitle" type="text" placeholder="Title (optional) — e.g. BIOL 200 Lec 8" />
     <textarea id="lecText" placeholder="Paste the lecture transcript here…"></textarea>
     <div class="lec-row">
-      <label class="lec-file" id="lecFileLabel">📎 <span id="lecFileName">Attach transcript or recording</span>
+      <label class="lec-file" id="lecFileLabel"><span id="lecFileName">Attach transcript or recording</span>
         <input id="lecFile" type="file" accept=".txt,.vtt,.srt,.pdf,.docx,audio/*,video/*" hidden />
       </label>
-      <a class="lec-bm" href="/lectures/bookmarklet" target="_blank" rel="noopener">⚡ one-click bookmarklet</a>
+      <a class="lec-bm" href="/lectures/bookmarklet" target="_blank" rel="noopener">one-click bookmarklet</a>
     </div>
     <div id="lecStatus" class="lec-status"></div>
     <div class="lec-actions">
@@ -280,7 +280,7 @@
 
 <div id="notifOverlay" class="hidden">
   <div class="lec-card">
-    <h2>⏰ Reminders &amp; alerts</h2>
+    <h2>Reminders &amp; alerts</h2>
     <p class="lec-hint">Get a buzz on a schedule. Or just tell Dubly in chat, e.g. "remind me every morning what's due" or "notify me in 1 min what's due".</p>
 
     <div id="notifList" class="nlist"></div>
@@ -317,7 +317,7 @@
 <div id="gate">
   <div class="gate-badge dubs-pic"></div>
   <h1>Dubly</h1>
-  <p>your husky study buddy · enter your passcode to let Dubly out 🐾</p>
+  <p>your husky study buddy · enter your passcode to let Dubly out</p>
   <input id="pass" type="password" inputmode="text" placeholder="passcode" autocomplete="off" />
   <button id="unlock">Unlock</button>
   <div class="err" id="gateErr"></div>
@@ -386,10 +386,10 @@ function addBubble(role, text, media){
   if (studyUrl){
     const exam = !/flashcard/i.test(text);  // study links are quizzes unless they say flashcards
     inner += `<button class="deckbtn" data-url="${esc(studyUrl)}">`
-      + `<span class="dt">${exam ? '📝 Quiz' : '📇 Flashcards'}</span>`
-      + `<span class="ds">tap to study →</span></button>`;
+      + `<span class="dt">${exam ? 'Quiz' : 'Flashcards'}</span>`
+      + `<span class="ds">tap to study</span></button>`;
   }
-  if (media) inner += `<a class="doc" href="${esc(media)}" target="_blank" rel="noopener" download>📄 Download</a>`;
+  if (media) inner += `<a class="doc" href="${esc(media)}" target="_blank" rel="noopener" download>Download</a>`;
   const av = (role === 'user') ? '' : '<div class="msg-av"></div>';  // Dubs' face on his replies
   row.innerHTML = `${av}<div class="bubble">${inner}</div>`;
   log.appendChild(row);
@@ -460,7 +460,7 @@ function renderChats(chats){
     const ren = document.createElement('button'); ren.className = 'chat-act'; ren.textContent = '✎';
     ren.title = 'Rename';
     ren.addEventListener('click', e=>{ e.stopPropagation(); renameChat(c.id, c.title); });
-    const del = document.createElement('button'); del.className = 'chat-act'; del.textContent = '🗑';
+    const del = document.createElement('button'); del.className = 'chat-act'; del.innerHTML = "<svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='3 6 5 6 21 6'/><path d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'/></svg>";
     del.title = 'Delete';
     del.addEventListener('click', e=>{ e.stopPropagation(); deleteChat(c.id); });
     row.append(t, ren, del); chatList.appendChild(row);
@@ -496,7 +496,7 @@ async function send(forced){
   const wasClear = files.length === 0 && CLEAR_RE.test(text.replace(/\s+/g,' ').trim());
   if (forced === undefined){ ta.value=''; ta.style.height='auto'; }
   const names = files.map(f=>f.name).join(', ');
-  const display = files.length ? (text ? text+'\n📎 '+names : '📎 '+names) : text;
+  const display = files.length ? (text ? text+'\n'+names : names) : text;
   addBubble('user', display, ''); clearPending(); showTyping();
   currentGen = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())+Math.random();
   controller = new AbortController();
@@ -516,7 +516,7 @@ async function send(forced){
   } catch(e){ hideTyping();
     // Aborted = the user hit stop; the server discards that reply, so stay quiet.
     if (e && e.name === 'AbortError'){ toast('Stopped'); }
-    else if (KEY) addBubble('assistant', '⚠️ connection hiccup — try again.', '');
+    else if (KEY) addBubble('assistant', 'connection hiccup - try again.', '');
   }
   finally { busy=false; controller=null; currentGen=null; updateSendButton(); toBottom(); updateChips(); }
 }
@@ -555,7 +555,7 @@ function renderPreviews(){
   pendingFiles.forEach((f, idx)=>{
     const chip=document.createElement('div'); chip.className='chip';
     const isImg=(f.content_type||'').startsWith('image/');
-    chip.innerHTML=`<span>${isImg?'🖼️':'📄'} ${esc(f.name)}</span>`;
+    chip.innerHTML=`<span>${esc(f.name)}</span>`;
     const x=document.createElement('button'); x.textContent='✕'; x.setAttribute('aria-label','Remove');
     x.addEventListener('click', ()=>{ pendingFiles.splice(idx,1); renderPreviews(); });
     chip.appendChild(x); previews.appendChild(chip);
@@ -575,7 +575,7 @@ const darkBtn = document.getElementById('mDark');
 function applyDark(on){
   document.documentElement.classList.toggle('dark', on);
   localStorage.setItem('dark', on ? '1' : '0');
-  darkBtn.innerHTML = on ? '☀️ <span>Light mode</span>' : '🌙 <span>Dark mode</span>';
+  darkBtn.innerHTML = on ? '<span>Light mode</span>' : '<span>Dark mode</span>';
 }
 darkBtn.addEventListener('click', ()=>{ closeMenu();
   applyDark(!document.documentElement.classList.contains('dark')); });
@@ -641,7 +641,7 @@ document.getElementById('mNotify').addEventListener('click', async ()=>{ closeMe
   const on = (Notification.permission === 'granted') && !notifyOff;
   if (on){ await disableNotify(); toast('Notifications off'); refreshNotifyLabel(); return; }
   const ok = await enableNotify();
-  toast(ok ? 'Notifications on ✓' : 'Notifications blocked — enable in browser settings');
+  toast(ok ? 'Notifications on' : 'Notifications blocked - enable in browser settings');
   refreshNotifyLabel();
 });
 
@@ -734,8 +734,8 @@ document.getElementById('mNotify').addEventListener('click', async ()=>{ closeMe
       const n = (e && e.name) || '';
       if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError'){
         toast(standalone
-          ? "mic blocked in the home-screen app — open Dubly in Safari/Chrome and allow the mic"
-          : "mic is blocked — tap the 'AA' or lock icon by the address bar → Microphone → Allow, then retry");
+          ? "mic blocked in the home-screen app - open Dubly in Safari/Chrome and allow the mic"
+          : "mic is blocked - tap the 'AA' or lock icon by the address bar, then Microphone, then Allow, then retry");
       } else if (n === 'NotFoundError' || n === 'DevicesNotFoundError'){
         toast('no microphone found on this device');
       } else if (n === 'NotReadableError' || n === 'TrackStartError'){
@@ -880,8 +880,8 @@ lecSaveBtn.addEventListener('click', async ()=>{
     closeLecture();
     lecTitle.value=''; lecText.value=''; lecFileEl.value=''; lecPending=null;
     lecFileName.textContent='Attach transcript or recording';
-    toast('Lecture saved ✓');
-    addBubble('assistant', `saved "${d.title}" 📚 — ask me anything about it, or say "make flashcards from that lecture".`, '');
+    toast('Lecture saved');
+    addBubble('assistant', `saved "${d.title}" - ask me anything about it, or say "make flashcards from that lecture".`, '');
   } catch(e){ lecSetStatus(e.message, true); }
   finally { lecSaveBtn.disabled = false; }
 });
@@ -891,7 +891,6 @@ const notifList = document.getElementById('notifList');
 const notifSeg = document.getElementById('notifSeg');
 const notifStatus = document.getElementById('notifStatus');
 let notifKindSel = 'daily';
-const NOTIF_ICON = { daily:'📅', weekly:'🗓️', due:'⏰', once:'⏱️' };
 function notifSetStatus(msg, err){ notifStatus.textContent = msg||''; notifStatus.classList.toggle('err', !!err); }
 function notifSyncFields(){
   document.querySelector('.nf-daily').classList.toggle('hidden', notifKindSel !== 'daily');
@@ -909,25 +908,24 @@ async function loadRules(){
   try {
     const r = await api('/chat/notifications'); const d = await r.json();
     const rules = d.rules || [];
-    if (!rules.length){ notifList.innerHTML = '<div class="nempty">No reminders yet — add one below 👇</div>'; return; }
+    if (!rules.length){ notifList.innerHTML = '<div class="nempty">No reminders yet - add one below</div>'; return; }
     notifList.innerHTML = '';
     for (const rule of rules){
       const row = document.createElement('div');
       row.className = 'nitem' + (rule.enabled ? '' : ' off');
-      const ic = document.createElement('span'); ic.className = 'nicon'; ic.textContent = NOTIF_ICON[rule.kind] || '🔔';
       const meta = document.createElement('div'); meta.className = 'nmeta';
       const lab = document.createElement('div'); lab.className = 'nlabel'; lab.textContent = rule.label;
       meta.appendChild(lab);
       if (rule.detail){ const sub = document.createElement('div'); sub.className = 'nsub'; sub.textContent = rule.detail; meta.appendChild(sub); }
       else if (rule.oneoff){ const sub = document.createElement('div'); sub.className = 'nsub'; sub.textContent = 'one-time reminder'; meta.appendChild(sub); }
-      row.appendChild(ic); row.appendChild(meta);
+      row.appendChild(meta);
       if (!rule.oneoff){   // recurring rules get an on/off switch
         const sw = document.createElement('label'); sw.className = 'nswitch';
         const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = rule.enabled;
         cb.addEventListener('change', async ()=>{ await api('/chat/notifications/'+rule.id+'/toggle', {method:'POST'}); loadRules(); });
         const kn = document.createElement('span'); sw.appendChild(cb); sw.appendChild(kn); row.appendChild(sw);
       }
-      const del = document.createElement('button'); del.className = 'ntrash'; del.textContent = '🗑'; del.title = 'Delete';
+      const del = document.createElement('button'); del.className = 'ntrash'; del.innerHTML = "<svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='3 6 5 6 21 6'/><path d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'/></svg>"; del.title = 'Delete';
       del.addEventListener('click', async ()=>{ await api('/chat/notifications/'+rule.id, {method:'DELETE'}); loadRules(); });
       row.appendChild(del);
       notifList.appendChild(row);
@@ -950,7 +948,7 @@ document.getElementById('notifAdd').addEventListener('click', async ()=>{
     const r = await api('/chat/notifications', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const d = await r.json();
     if (!r.ok){ notifSetStatus(d.error || "couldn't add that", true); return; }
-    notifSetStatus('added ✓'); loadRules();
+    notifSetStatus('added'); loadRules();
   } catch(e){ notifSetStatus("couldn't add that", true); }
 });
 
@@ -964,8 +962,8 @@ window.addEventListener('message', async (e)=>{
   if (window.__lecSaving) return; window.__lecSaving = true;
   try {
     const d = await postLecture(m.title || 'Lecture', m.transcript, []);
-    toast('Lecture saved ✓');
-    setTimeout(()=> addBubble('assistant', `saved "${d.title}" 📚 from Panopto — ask me anything about it, or say "make flashcards from that lecture".`, ''), 1500);
+    toast('Lecture saved');
+    setTimeout(()=> addBubble('assistant', `saved "${d.title}" from Panopto - ask me anything about it, or say "make flashcards from that lecture".`, ''), 1500);
   } catch(err){ toast("Couldn't save that lecture"); }
   finally { window.__lecSaving = false; }
 });

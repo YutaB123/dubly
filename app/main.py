@@ -97,7 +97,7 @@ def _handle_media(deps: AppDeps, media: list) -> None:
             pass
     if saved:
         deps.sms.send(
-            f"saved {', '.join(saved)} to your OneDrive '{deps.onedrive.folder}' folder ✅ "
+            f"saved {', '.join(saved)} to your OneDrive '{deps.onedrive.folder}' folder "
             "(it'll show up on your laptop once OneDrive syncs)"
         )
     else:
@@ -125,7 +125,7 @@ def _handle_command(deps: AppDeps, body: str) -> bool:
         deps.study.clear()
         if deps.reminders is not None:
             deps.reminders.clear_all()
-        deps.sms.send("cleared everything — chat, reminders, and study pages. fresh start ✨")
+        deps.sms.send("cleared everything: chat, reminders, and study pages. fresh start.")
         return True
 
     if cmd in ("files", "list files", "list", "my files") and deps.onedrive is not None:
@@ -170,7 +170,7 @@ def _keep_typing(deps: AppDeps, message_sid: str, stop: threading.Event) -> None
     indicator isn't available (e.g. the sandbox), fall back to one quick text
     so a slow reply never looks like nothing's happening."""
     if not deps.sms.send_typing(message_sid):
-        deps.sms.send("on it 🤔")
+        deps.sms.send("on it")
         return
     while not stop.wait(TYPING_REFRESH_SECONDS):
         if not deps.sms.send_typing(message_sid):
@@ -278,15 +278,15 @@ h1{margin:0 0 6px}.bm{display:inline-block;background:linear-gradient(180deg,#7a
 text-decoration:none;font-weight:700;padding:12px 20px;border-radius:12px;margin:14px 0;cursor:grab}
 ol{padding-left:20px}b{color:#5b3aa0}</style></head>
 <body><div class="card">
-<h1>🎓 Add to Dubly</h1>
+<h1>Add to Dubly</h1>
 <p>One click to send a UW Panopto lecture's transcript straight to Dubly.</p>
 <p><b>Set up once:</b> drag this button up to your bookmarks bar:</p>
-<p><a class="bm" id="bm" href="#">📚 Add to Dubly</a></p>
+<p><a class="bm" id="bm" href="#">Add to Dubly</a></p>
 <p><b>Then, on any lecture:</b></p>
 <ol><li>Open the lecture in Panopto (the viewer page).</li>
 <li>Click the <b>Add to Dubly</b> bookmark.</li>
 <li>It grabs the transcript and saves it to Dubly for you.</li></ol>
-<p style="color:#6b6385;font-size:14px">No captions on a video? Use Dubly's <b>⋯ → Add lecture</b> and paste the transcript instead.</p>
+<p style="color:#6b6385;font-size:14px">No captions on a video? Use Dubly's <b>⋯ Add lecture</b> and paste the transcript instead.</p>
 </div>
 <script>
 var BM="javascript:(function(){var D='__DUBLY__';var m=location.href.match(/[?&]id=([0-9a-fA-F-]{20,})/);if(!m){alert('Open a Panopto lecture (the viewer page) first, then click this.');return;}fetch('/Panopto/Pages/Transcription/GenerateSRT.ashx?id='+m[1]+'&language=0',{credentials:'include'}).then(function(r){return r.text();}).then(function(s){var t=s.split(/\\r?\\n/).filter(function(l){l=l.trim();return l&&!/^\\d+$/.test(l)&&l.indexOf('-->')<0;}).join(' ').replace(/\\s+/g,' ').trim();if(!t){alert('No captions found for this lecture. Use Add lecture in Dubly and paste the transcript.');return;}var ti=(document.title||'Lecture').replace(/\\s*[-|].*$/,'').trim()||'Lecture';var w=window.open(D+'/chat?addlecture=1','dubly');var sent=false,iv;function go(){if(sent||!w)return;try{w.postMessage({type:'dubly-lecture',title:ti,transcript:t},D);sent=true;if(iv)clearInterval(iv);}catch(e){}}window.addEventListener('message',function(e){if(e.origin===D&&e.data&&e.data.type==='dubly-ready')go();});var n=0;iv=setInterval(function(){n++;if(n>20){clearInterval(iv);return;}go();},500);}).catch(function(){alert('Could not fetch the transcript. Make sure the lecture has captions, or paste it via Add lecture.');});})();";
@@ -310,7 +310,7 @@ def _web_authed(deps: AppDeps, key: str) -> bool:
 _CLEAR_CMDS = {"clear", "clear chat", "clear all", "clear everything", "reset"}
 
 GREETING = (
-    "hey 🐾 i'm Dubly, your husky study buddy. ask me what's due, your grades, the syllabus, "
+    "hey, i'm Dubly, your husky study buddy. ask me what's due, your grades, the syllabus, "
     "anything canvas, or i can build you a study guide, quiz, or add a lecture."
 )
 
@@ -339,7 +339,7 @@ def _greeting_text(deps: AppDeps) -> str:
             courses = [c for c in deps.canvas.list_courses() if is_real_class(c.code)]
         except Exception:
             courses = []
-    hello = f"hey {first} 🐾" if first else "hey 🐾"
+    hello = f"hey {first}" if first else "hey"
     if not courses:
         return (
             f"{hello} i'm Dubly, your husky study buddy. ask me what's due, your grades, the "
@@ -541,7 +541,7 @@ def build_app(deps: AppDeps) -> FastAPI:
             deps.push.store.save(sub)
             # Immediately confirm with a real notification (shown even if focused).
             deps.push.notify(
-                "Study Assistant", "🔔 Notifications are on — you're all set.", force=True
+                "Study Assistant", "Notifications are on. You're all set.", force=True
             )
         return {"ok": True}
 
@@ -606,7 +606,7 @@ def build_app(deps: AppDeps) -> FastAPI:
             return JSONResponse({"error": "unauthorized"}, status_code=401)
         if deps.push is None:
             return {"results": [{"error": "no push service"}]}
-        return {"results": deps.push.send_sync("Study Assistant", "✅ test notification", force=True)}
+        return {"results": deps.push.send_sync("Study Assistant", "test notification", force=True)}
 
     # ---- Conversations (ChatGPT-style: list / new / rename / delete) ---------
 
@@ -709,7 +709,7 @@ def build_app(deps: AppDeps) -> FastAPI:
         start = deps.chats.max_id(cid)
         bubble = text
         if files:
-            note = "📎 " + ", ".join(name for name, _, _ in files)
+            note = ", ".join(name for name, _, _ in files)
             bubble = f"{text}\n{note}" if text else note
         deps.chats.append(cid, "user", bubble)
         # Route the reply (and any tool-sent files/reminders) into THIS chat.

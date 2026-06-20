@@ -161,9 +161,9 @@ class NotificationService:
         except Exception:
             items = []
         if not items:
-            return "nothing due " + ("today" if days <= 2 else "this week") + " 🎉"
+            return "nothing due " + ("today" if days <= 2 else "this week")
         # Group by when it's due so it reads as a short scannable list:
-        #   📋 what's due:
+        #   what's due:
         #   Sun 10am:
         #   • MATH 126 - WebAssign 6
         #   • PSYCH 101 - Reading Quiz 6
@@ -175,7 +175,7 @@ class NotificationService:
                 groups[when] = []
                 order.append(when)
             groups[when].append(f"• {it.course} - {it.title}")
-        lines = ["📋 what's due:"]
+        lines = ["what's due:"]
         for when in order:
             lines.append("")
             lines.append(f"{when}:")
@@ -232,7 +232,7 @@ class NotificationService:
                     key = f"{r['id']}:{it.ref}"
                     if not self.store.was_sent(key):
                         self.store.mark_sent(key)
-                        self._deliver(f"⏰ {it.course} - {it.title} is due {human_due(it.due_at)}")
+                        self._deliver(f"{it.course} - {it.title} is due {human_due(it.due_at)}")
 
     # --- create / list / remove (shared by the tool AND the HTTP menu) -------
 

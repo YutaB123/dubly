@@ -158,7 +158,7 @@ def test_digest_is_grouped_and_multiline(tmp_path):
     ]
     svc, _, _, _ = make_service(tmp_path, items)
     digest = svc._due_digest(7)
-    assert digest.startswith("📋 what's due:")
+    assert digest.startswith("what's due:")
     assert "• MATH 126 - WebAssign 6" in digest
     assert digest.count("\n") >= 5                  # genuinely multi-line, not a run-on
 
