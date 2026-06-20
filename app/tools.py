@@ -492,9 +492,16 @@ class ToolBox:
 
     def _format_event(self, e) -> str:
         when = timefmt.human_due(e.start_at, now=self._now())
+        # An explicit day count so the student can be told "in N days" for events
+        # further out (human_due switches to an absolute date past a week).
+        countdown = ""
+        if e.start_at is not None:
+            days = (e.start_at - self._now()).days
+            if days >= 2:
+                countdown = f" (in {days} days)"
         loc = f" @ {e.location}" if e.location else ""
         course = f"{e.course} — " if e.course else ""
-        return f"{course}{e.title} — {when}{loc}"
+        return f"{course}{e.title} — {when}{countdown}{loc}"
 
     def _format_announcement(self, a) -> str:
         when = timefmt.human_when(a.posted_at, now=self._now())

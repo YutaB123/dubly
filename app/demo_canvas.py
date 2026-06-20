@@ -126,6 +126,16 @@ _DATA = {
 }
 
 
+# Final exams, so "how long until my math final?" has a real date to count to.
+# (title, days from now, hour 24h, location). Kept inside the default 14-day
+# calendar window so they show up.
+_FINALS = {
+    "CSE 142": ("Final Exam", 11, 8, "Kane Hall 130"),
+    "MATH 126": ("Final Exam (cumulative)", 13, 14, "Smith Hall 205"),
+    "PSYCH 101": ("Final Exam", 9, 10, "Bagley Hall 154"),
+}
+
+
 class DemoCanvasClient(CanvasClient):
     """Duck-type of CanvasClient that serves the sample data above and never
     touches the network."""
@@ -228,7 +238,20 @@ class DemoCanvasClient(CanvasClient):
         return []
 
     def get_calendar_events(self, days_ahead: int = 14) -> list[CalendarEvent]:
-        return []
+        events: list[CalendarEvent] = []
+        for c in _COURSES:
+            key = re.match(r"[A-Z]+ \d+", c.code).group(0)
+            fin = _FINALS.get(key)
+            if not fin:
+                continue
+            title, days_out, hour, loc = fin
+            if days_out <= days_ahead:
+                events.append(CalendarEvent(
+                    course=key, title=title, start_at=_in(days_out, hour),
+                    location=loc, description=f"{key} {title.lower()}.",
+                ))
+        events.sort(key=lambda e: e.start_at or _now())
+        return events
 
     def get_inbox(self, limit: int = 20) -> list[InboxMessage]:
         return []
