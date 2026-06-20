@@ -268,9 +268,36 @@ class NotificationService:
         for r in self.store.list():
             out.append({
                 "id": r["id"], "kind": r["kind"], "enabled": r["enabled"],
-                "label": describe(r),
+                "oneoff": False, "label": describe(r), "detail": "",
                 "time": r["hhmm"], "weekday": r["weekday"],
                 "hours_before": r["hours_before"],
+            })
+        # pending one-off reminders (date jobs — both schedule-once and
+        # set_reminder). They auto-remove once they fire, so the list always
+        # reflects what's still coming. Recurring 'notif_' cron/interval jobs
+        # are already covered by the store above.
+        for job in self.scheduler.get_jobs():
+            if job.id == "notif_due_check" or job.id.startswith("notif_"):
+                continue
+            when = getattr(job.trigger, "run_date", None) or getattr(job, "next_run_time", None)
+            if when is None:
+                continue  # not a one-shot date job
+            msg = (job.args[0] if job.args else "") or "reminder"
+            preview = msg.splitlines()[0].strip()
+            if len(preview) > 38:
+                preview = preview[:37] + "…"
+            # round UP for imminent ones so a 1-min reminder isn't "in 0 min".
+            secs = (when - datetime.now(timezone.utc)).total_seconds()
+            if secs < 0:
+                label = "any moment"
+            elif secs < 3600:
+                label = f"in {max(1, round(secs / 60))} min"
+            else:
+                label = human_due(when)
+            out.append({
+                "id": job.id, "kind": "once", "enabled": True, "oneoff": True,
+                "label": label, "detail": preview,
+                "time": "", "weekday": "", "hours_before": 0,
             })
         return out
 
@@ -287,11 +314,19 @@ class NotificationService:
         return True
 
     def remove_rule(self, rule_id: str) -> bool:
-        if self.store.get(rule_id) is None:
-            return False
-        self._unschedule_job(rule_id)
-        self.store.remove(rule_id)
-        return True
+        # A stored recurring rule...
+        if self.store.get(rule_id) is not None:
+            self._unschedule_job(rule_id)
+            self.store.remove(rule_id)
+            return True
+        # ...or a pending one-off job (schedule-once / set_reminder).
+        try:
+            if self.scheduler.get_job(rule_id) is not None:
+                self.scheduler.remove_job(rule_id)
+                return True
+        except Exception:
+            pass
+        return False
 
     # --- ToolBox integration -------------------------------------------------
 

@@ -163,6 +163,23 @@ def test_digest_is_grouped_and_multiline(tmp_path):
     assert digest.count("\n") >= 5                  # genuinely multi-line, not a run-on
 
 
+def test_oneoff_shows_in_list_and_is_removable(tmp_path):
+    items = [_item("CSE 142", "Quiz 4", 10)]
+    svc, _, _, _ = make_service(tmp_path, items)
+    svc.add_rule(kind="daily", time="08:00")           # a recurring rule
+    svc.remind_once(1, "📋 what's due:\nin 10 hr:\n• CSE 142 - Quiz 4")
+    rules = svc.list_rules()
+    oneoffs = [r for r in rules if r["oneoff"]]
+    assert len(oneoffs) == 1
+    assert oneoffs[0]["kind"] == "once"
+    assert "in 1 min" in oneoffs[0]["label"]           # shows when it'll alert
+    assert "what's due" in oneoffs[0]["detail"]        # preview (first line)
+    assert any(not r["oneoff"] for r in rules)          # recurring rule still listed
+    # deleting the one-off by its job id removes it from the list
+    assert svc.remove_rule(oneoffs[0]["id"]) is True
+    assert [r for r in svc.list_rules() if r["oneoff"]] == []
+
+
 def test_tool_names_match_schemas(tmp_path):
     svc, _, _, _ = make_service(tmp_path)
     assert set(svc.tool_names()) == {"schedule_notification", "list_notifications", "cancel_notification"}
